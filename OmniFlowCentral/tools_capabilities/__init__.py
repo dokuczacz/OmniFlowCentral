@@ -1,35 +1,21 @@
-import json
 import logging
 
 import azure.functions as func
 
+from OmniFlowCentral.shared.response import json_response
+from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
+
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("tools_capabilities: start")
-    caps = {
-        "capabilities": [
+    capabilities = []
+    for name, spec in TOOL_SPECS.items():
+        capabilities.append(
             {
-                "name": "list_blobs",
-                "description": "List blobs in the configured storage container",
-                "method": "POST",
-                "params": {
-                    "prefix": "optional string",
-                    "max_results": "optional int (max 1000)"
-                }
-            },
-            {
-                "name": "get_blob",
-                "description": "Get blob content by name (decoded as UTF-8)",
-                "method": "POST",
-                "params": {
-                    "name": "string (blob name)"
-                }
+                "name": name,
+                "description": spec.get("description", ""),
+                "method": spec.get("method", "POST"),
+                "params": spec.get("params", {}),
             }
-        ]
-    }
-
-    return func.HttpResponse(
-        json.dumps(caps, ensure_ascii=False),
-        status_code=200,
-        mimetype="application/json",
-    )
+        )
+    return json_response({"capabilities": capabilities}, status=200)

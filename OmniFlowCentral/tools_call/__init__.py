@@ -1,138 +1,139 @@
 import json
 import logging
-import os
-import time
 
 import azure.functions as func
-from azure.storage.blob import ContainerClient
+
+from OmniFlowCentral.shared.blob_ops import ToolError, delete_blob, list_blobs, upload_blob
+from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
 from OmniFlowCentral.shared.request_contract import parse_request
+from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
+from OmniFlowCentral.shared.user_validator import UserValidator
+from OmniFlowCentral.shared.response import json_response
+
+DEFAULT_MAX_RESULTS = 200
+DEFAULT_TIMEOUT_SECONDS = 10
 
 
-def _get_connection_string():
-    return os.environ.get("AZURE_STORAGE_CONNECTION_STRING") or os.environ.get("AzureWebJobsStorage")
+def _as_int(value, default_value):
+    if value is None:
+        return default_value
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("VALIDATION_FAILED", f"Expected integer, got {value!r}.", {"field": value}) from exc
+
+
+def _as_bool(value, default_value):
+    if value in (None, ""):
+        return default_value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
+def _require_param(params, name):
+    value = params.get(name)
+    if value is None:
+        raise ToolError("MISSING_PARAM", f"Missing required parameter '{name}'.")
+    return value
+
+
+def _resolve_user_id(req, payload):
+    user_id, detected = UserValidator.get_user_id_from_request(req)
+    if not detected and (payload_user := payload.get("user_id")):
+        candidate = str(payload_user).strip()
+        if candidate:
+            if not UserValidator.validate_user_id(candidate):
+                raise ToolError("VALIDATION_FAILED", "Invalid user_id format.")
+            user_id = candidate
+            detected = True
+    if not detected:
+        user_id = "default"
+    return user_id
+
+
+def _handle_list_blobs(params, user_id):
+    prefix = params.get("prefix")
+    result = list_blobs(
+        user_id=user_id,
+        prefix=prefix or "",
+        max_results=_as_int(params.get("max_results"), DEFAULT_MAX_RESULTS),
+        timeout_seconds=_as_int(params.get("timeout_seconds"), DEFAULT_TIMEOUT_SECONDS),
+    )
+    return {"items": result}
+
+
+def _handle_upload(params, user_id):
+    name = _require_param(params, "name")
+    content = _require_param(params, "content")
+    overwrite = _as_bool(params.get("overwrite"), True)
+    return upload_blob(name=name, content=content, user_id=user_id, overwrite=overwrite)
+
+
+def _handle_delete(params, user_id):
+    name = _require_param(params, "name")
+    return delete_blob(name=name, user_id=user_id)
+
+
+TOOL_HANDLERS = {
+    "list_blobs": _handle_list_blobs,
+    "upload_blob": _handle_upload,
+    "delete_blob": _handle_delete,
+}
+
+
+def _error_response(tool, user_id, trace_id, exc: ToolError) -> func.HttpResponse:
+    payload = build_error_payload(exc.code, message=exc.message, details=exc.details)
+    payload.update({"tool": tool, "user_id": user_id})
+    if trace_id:
+        payload["trace_id"] = trace_id
+    status_code = exc.status or get_status_code(exc.code, 400)
+    return json_response(payload, status=status_code)
+
+
+def _success_response(tool, user_id, trace_id, result: dict) -> func.HttpResponse:
+    payload = {"status": "success", "tool": tool, "user_id": user_id, "result": result}
+    if trace_id:
+        payload["trace_id"] = trace_id
+    return json_response(payload, status=200)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info("tools_call: start")
+    logging.info("gpt_tools_handler: received request")
+    contract = parse_request(req)
+    tool = contract.get("tool") or ""
+    payload = contract.get("payload") or {}
+    trace_id = payload.get("trace_id")
+
+    if not tool:
+        error = ToolError("MISSING_PARAM", "Missing 'tool' parameter.")
+        return _error_response(tool, "default", trace_id, error)
+
+    if tool not in TOOL_SPECS:
+        error = ToolError("INVALID_TOOL", f"Unsupported tool '{tool}'.")
+        return _error_response(tool, "default", trace_id, error)
+
+    handler = TOOL_HANDLERS.get(tool)
+    if handler is None:
+        error = ToolError("INVALID_TOOL", f"Unsupported tool '{tool}'.")
+        return _error_response(tool, "default", trace_id, error)
 
     try:
-        contract = parse_request(req)
-        tool = contract.get("tool") or ""
-        if not tool:
-            return func.HttpResponse(
-                json.dumps({"error": "Missing 'tool' parameter"}),
-                status_code=400,
-                mimetype="application/json",
-            )
+        user_id = _resolve_user_id(req, payload)
+        if not UserValidator.validate_user_id(user_id):
+            raise ToolError("VALIDATION_FAILED", "User identifier failed validation.")
 
-        conn_str = _get_connection_string()
-        if not conn_str:
-            logging.error("Missing Azure storage connection string")
-            return func.HttpResponse(
-                json.dumps({"error": "Missing storage connection string"}),
-                status_code=500,
-                mimetype="application/json",
-            )
-
-        container_name = os.environ.get("AZURE_BLOB_CONTAINER_NAME")
-        if not container_name:
-            logging.error("Missing AZURE_BLOB_CONTAINER_NAME env var")
-            return func.HttpResponse(
-                json.dumps({"error": "Missing AZURE_BLOB_CONTAINER_NAME"}),
-                status_code=500,
-                mimetype="application/json",
-            )
-
-        # Implement supported tools
-        if tool == "list_blobs":
-            payload = contract.get("payload", {}) or {}
-            prefix = req.params.get("prefix") or payload.get("prefix")
-            max_results = 200
-            try:
-                max_results = int(req.params.get("max_results") or payload.get("max_results") or max_results)
-            except Exception:
-                max_results = 200
-            if max_results < 0:
-                max_results = 0
-            if max_results > 1000:
-                max_results = 1000
-
-            timeout_s = 10
-            try:
-                timeout_s = int(os.environ.get("AZURE_BLOB_LIST_TIMEOUT_SECONDS") or timeout_s)
-            except Exception:
-                timeout_s = 10
-            if timeout_s < 1:
-                timeout_s = 1
-            if timeout_s > 60:
-                timeout_s = 60
-
-            try:
-                client = ContainerClient.from_connection_string(conn_str, container_name)
-                blobs = []
-                start = time.monotonic()
-                for b in client.list_blobs(name_starts_with=prefix, timeout=timeout_s):
-                    blobs.append({"name": b.name, "size": getattr(b, "size", None)})
-                    if len(blobs) >= max_results:
-                        break
-                    if (time.monotonic() - start) > timeout_s:
-                        break
-
-                return func.HttpResponse(
-                    json.dumps({"blobs": blobs}, ensure_ascii=False),
-                    status_code=200,
-                    mimetype="application/json",
-                )
-            except Exception as e:
-                logging.exception("Error listing blobs (tools_call)")
-                return func.HttpResponse(
-                    json.dumps({"error": str(e)}),
-                    status_code=500,
-                    mimetype="application/json",
-                )
-
-        if tool == "get_blob":
-            payload = contract.get("payload", {}) or {}
-            name = req.params.get("name") or payload.get("name")
-            if not name:
-                return func.HttpResponse(
-                    json.dumps({"error": "Missing 'name' parameter for get_blob"}),
-                    status_code=400,
-                    mimetype="application/json",
-                )
-            try:
-                client = ContainerClient.from_connection_string(conn_str, container_name)
-                blob_client = client.get_blob_client(name)
-                stream = blob_client.download_blob()
-                data = stream.readall()
-                try:
-                    text = data.decode("utf-8")
-                except Exception:
-                    text = data.decode("utf-8", errors="replace")
-
-                return func.HttpResponse(
-                    json.dumps({"name": name, "content": text}, ensure_ascii=False),
-                    status_code=200,
-                    mimetype="application/json",
-                )
-            except Exception as e:
-                logging.exception("Error getting blob (tools_call)")
-                return func.HttpResponse(
-                    json.dumps({"error": str(e)}),
-                    status_code=500,
-                    mimetype="application/json",
-                )
-
-        return func.HttpResponse(
-            json.dumps({"error": f"Unsupported tool: {tool}"}),
-            status_code=400,
-            mimetype="application/json",
-        )
-
-    except Exception:
-        logging.exception("Unexpected error in tools_call")
-        return func.HttpResponse(
-            json.dumps({"error": "internal error"}),
-            status_code=500,
-            mimetype="application/json",
-        )
+        params = payload.get("params")
+        if not isinstance(params, dict):
+            params = payload
+        result = handler(params, user_id)
+        return _success_response(tool, user_id, trace_id, result)
+    except ToolError as exc:
+        logging.warning("Tool error in %s: %s", tool, exc)
+        return _error_response(tool, user_id if 'user_id' in locals() else "default", trace_id, exc)
+    except Exception as exc:
+        logging.exception("Unexpected gpt handler failure")
+        generic = ToolError("UPSTREAM_ERROR", "Internal failure.", {"detail": str(exc)}, status=500)
+        return _error_response(tool, user_id if 'user_id' in locals() else "default", trace_id, generic)

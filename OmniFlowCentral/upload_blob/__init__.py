@@ -1,48 +1,43 @@
-import json
 import logging
-import os
 
 import azure.functions as func
-from azure.storage.blob import ContainerClient
+
+from OmniFlowCentral.shared.blob_ops import ToolError, upload_blob
+from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
 from OmniFlowCentral.shared.request_contract import parse_request
+from OmniFlowCentral.shared.response import json_response
+from OmniFlowCentral.shared.user_validator import extract_user_id
 
 
-def _get_connection_string():
-    return os.environ.get("AZURE_STORAGE_CONNECTION_STRING") or os.environ.get("AzureWebJobsStorage")
+def _to_bool(value, default=True):
+    if value in (None, ""):
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in ("1", "true", "yes", "on")
+
+
+def _error_response(exc: ToolError) -> func.HttpResponse:
+    payload = build_error_payload(exc.code, message=exc.message, details=exc.details)
+    status = exc.status or get_status_code(exc.code, 400)
+    return json_response(payload, status=status)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("upload_blob: start")
-
+    contract = parse_request(req)
+    payload = contract.get("payload") or {}
+    name = req.params.get("name") or payload.get("name")
+    content = payload.get("content") or req.params.get("content")
+    overwrite = _to_bool(payload.get("overwrite") or req.params.get("overwrite"))
     try:
-        contract = parse_request(req)
-        payload = contract.get("payload", {}) or {}
-
-        name = req.params.get("name") or payload.get("name")
-        content = payload.get("content") or req.params.get("content")
-        overwrite = payload.get("overwrite") or req.params.get("overwrite") or True
-
-        if not name:
-            return func.HttpResponse(json.dumps({"error": "Missing 'name'"}), status_code=400, mimetype="application/json")
-        if content is None:
-            return func.HttpResponse(json.dumps({"error": "Missing 'content'"}), status_code=400, mimetype="application/json")
-
-        conn_str = _get_connection_string()
-        if not conn_str:
-            logging.error("Missing Azure storage connection string")
-            return func.HttpResponse(json.dumps({"error": "Missing storage connection string"}), status_code=500, mimetype="application/json")
-
-        container_name = os.environ.get("AZURE_BLOB_CONTAINER_NAME")
-        if not container_name:
-            logging.error("Missing AZURE_BLOB_CONTAINER_NAME env var")
-            return func.HttpResponse(json.dumps({"error": "Missing AZURE_BLOB_CONTAINER_NAME"}), status_code=500, mimetype="application/json")
-
-        client = ContainerClient.from_connection_string(conn_str, container_name)
-        blob_client = client.get_blob_client(name)
-        # Write text content (UTF-8)
-        blob_client.upload_blob(content.encode("utf-8"), overwrite=bool(overwrite))
-
-        return func.HttpResponse(json.dumps({"result": "uploaded", "name": name}), status_code=200, mimetype="application/json")
-    except Exception:
-        logging.exception("Error in upload_blob")
-        return func.HttpResponse(json.dumps({"error": "internal"}), status_code=500, mimetype="application/json")
+        result = upload_blob(
+            name=name,
+            content=content,
+            overwrite=overwrite,
+            user_id=extract_user_id(req),
+        )
+        return json_response({"status": "success", "result": result}, status=200)
+    except ToolError as exc:
+        logging.warning("upload_blob tool error: %s", exc)
+        return _error_response(exc)

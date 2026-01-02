@@ -4,6 +4,7 @@ import os
 
 import azure.functions as func
 from azure.storage.blob import ContainerClient
+from OmniFlowCentral.shared.request_contract import parse_request
 
 
 def _get_connection_string():
@@ -14,12 +15,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("delete_blob: start")
 
     try:
-        try:
-            body = req.get_json()
-        except Exception:
-            body = {}
+        contract = parse_request(req)
+        payload = contract.get("payload", {}) or {}
 
-        name = req.params.get("name") or body.get("name")
+        name = req.params.get("name") or payload.get("name")
         if not name:
             return func.HttpResponse(json.dumps({"error": "Missing 'name'"}), status_code=400, mimetype="application/json")
 

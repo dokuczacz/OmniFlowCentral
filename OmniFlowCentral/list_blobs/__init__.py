@@ -5,6 +5,7 @@ import time
 
 import azure.functions as func
 from azure.storage.blob import ContainerClient
+from OmniFlowCentral.shared.request_contract import parse_request
 
 
 def _get_connection_string():
@@ -32,17 +33,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
 
-    prefix = req.params.get("prefix")
-    if not prefix:
-        try:
-            req_body = req.get_json()
-            prefix = req_body.get("prefix")
-        except Exception:
-            prefix = None
+    contract = parse_request(req)
+    payload = contract.get("payload", {}) or {}
+    prefix = req.params.get("prefix") or payload.get("prefix")
 
     max_results = 200
     try:
-        max_results = int(req.params.get("max_results") or max_results)
+        max_results = int(req.params.get("max_results") or payload.get("max_results") or max_results)
     except Exception:
         max_results = 200
     if max_results < 0:

@@ -5,6 +5,7 @@ import time
 
 import azure.functions as func
 from azure.storage.blob import ContainerClient
+from OmniFlowCentral.shared.request_contract import parse_request
 
 
 def _get_connection_string():
@@ -15,13 +16,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("tools_call: start")
 
     try:
-        body = {}
-        try:
-            body = req.get_json()
-        except Exception:
-            body = {}
-
-        tool = (req.params.get("tool") or body.get("tool") or "").strip()
+        contract = parse_request(req)
+        tool = contract.get("tool") or ""
         if not tool:
             return func.HttpResponse(
                 json.dumps({"error": "Missing 'tool' parameter"}),
@@ -49,10 +45,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
         # Implement supported tools
         if tool == "list_blobs":
-            prefix = req.params.get("prefix") or body.get("prefix")
+            payload = contract.get("payload", {}) or {}
+            prefix = req.params.get("prefix") or payload.get("prefix")
             max_results = 200
             try:
-                max_results = int(req.params.get("max_results") or body.get("max_results") or max_results)
+                max_results = int(req.params.get("max_results") or payload.get("max_results") or max_results)
             except Exception:
                 max_results = 200
             if max_results < 0:
@@ -95,7 +92,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 )
 
         if tool == "get_blob":
-            name = req.params.get("name") or body.get("name")
+            payload = contract.get("payload", {}) or {}
+            name = req.params.get("name") or payload.get("name")
             if not name:
                 return func.HttpResponse(
                     json.dumps({"error": "Missing 'name' parameter for get_blob"}),

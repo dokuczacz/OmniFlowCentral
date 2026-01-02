@@ -4,6 +4,7 @@ import os
 
 import azure.functions as func
 from azure.storage.blob import ContainerClient
+from OmniFlowCentral.shared.request_contract import parse_request
 
 
 def _get_connection_string():
@@ -14,14 +15,12 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("upload_blob: start")
 
     try:
-        try:
-            body = req.get_json()
-        except Exception:
-            body = {}
+        contract = parse_request(req)
+        payload = contract.get("payload", {}) or {}
 
-        name = req.params.get("name") or body.get("name")
-        content = body.get("content") or req.params.get("content")
-        overwrite = body.get("overwrite") or req.params.get("overwrite") or True
+        name = req.params.get("name") or payload.get("name")
+        content = payload.get("content") or req.params.get("content")
+        overwrite = payload.get("overwrite") or req.params.get("overwrite") or True
 
         if not name:
             return func.HttpResponse(json.dumps({"error": "Missing 'name'"}), status_code=400, mimetype="application/json")

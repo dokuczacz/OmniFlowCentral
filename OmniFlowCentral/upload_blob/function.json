@@ -7,7 +7,7 @@
       "direction": "in",
       "name": "req",
       "methods": [ "post" ],
-      "route": "tools/call"
+	  "route": "tools/upload_blob"
     },
     {
       "type": "http",

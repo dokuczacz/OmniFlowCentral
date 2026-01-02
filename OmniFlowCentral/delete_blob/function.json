@@ -7,7 +7,7 @@
       "direction": "in",
       "name": "req",
       "methods": [ "post" ],
-      "route": "tools/call"
+	  "route": "tools/delete_blob"
     },
     {
       "type": "http",

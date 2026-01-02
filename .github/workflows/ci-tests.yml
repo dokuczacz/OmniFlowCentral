@@ -1,0 +1,43 @@
+name: CI Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'feature/**'
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r OmniFlowCentral/requirements.txt pytest pytest-mock requests
+      - name: Run unit tests
+        run: pytest tests/unit -q
+
+  integration:
+    name: Integration smoke tests
+    needs: unit
+    if: ${{ secrets.AZURE_FUNCTIONS_HOST_URL && secrets.AZURE_STORAGE_CONNECTION_STRING }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r OmniFlowCentral/requirements.txt pytest pytest-mock requests
+      - name: Run integration tests
+        env:
+          AZURE_FUNCTIONS_HOST_URL: ${{ secrets.AZURE_FUNCTIONS_HOST_URL }}
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: pytest tests/integration -q

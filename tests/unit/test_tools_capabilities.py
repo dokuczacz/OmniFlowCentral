@@ -1,6 +1,6 @@
 import json
 
-from OmniFlowCentral.tools_capabilities import __init__ as tc
+import OmniFlowCentral.tools_capabilities as tc
 
 
 def test_tools_capabilities_returns_list():

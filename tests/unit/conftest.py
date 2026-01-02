@@ -22,3 +22,9 @@ def fake_req():
         return FakeReq(params=params, json_body=json_body)
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def _default_env(monkeypatch):
+    monkeypatch.setenv("AZURE_STORAGE_CONNECTION_STRING", "UseDevelopmentStorage=true")
+    monkeypatch.setenv("AZURE_BLOB_CONTAINER_NAME", "test-container")

@@ -5,6 +5,10 @@ Quick steps to run the Functions host and integration smoke tests locally (Windo
 1) Create and activate a Python 3.11 venv (recommended):
 
 ```powershell
+cd "C:\AI memory\NewHope\OmniFlowCentralRepo"
+# If you previously created `.venv` with a different Python (e.g. 3.13), delete it first
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r OmniFlowCentral/requirements.txt

@@ -14,7 +14,6 @@ This script is Windows-focused but will try to be tolerant on other platforms.
 from __future__ import annotations
 import argparse
 import os
-import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -104,6 +103,27 @@ def find_activate_candidates(repo_root: Path):
     return [str(p) for p in candidates if p.exists()]
 
 
+def _venv_python_exe(repo_root: Path) -> Path | None:
+    cand = repo_root / ".venv" / "Scripts" / "python.exe"
+    return cand if cand.exists() else None
+
+
+def _read_venv_python_version(repo_root: Path) -> tuple[int, int] | None:
+    vpy = _venv_python_exe(repo_root)
+    if not vpy:
+        return None
+    try:
+        out = subprocess.check_output(
+            [str(vpy), "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        major, minor = out.split(".")
+        return int(major), int(minor)
+    except Exception:
+        return None
+
+
 def wait_for_health(url: str, timeout: int = 60) -> bool:
     import urllib.request
 
@@ -125,6 +145,12 @@ def main():
     if sys.version_info[:2] != (3, 11):
         print(f"Warning: running with Python {sys.version_info.major}.{sys.version_info.minor}. Recommended: Python 3.11.")
         print("Proceeding, but consider creating a 3.11 venv (use `py -3.11 -m venv .venv`) and re-run.")
+
+    venv_ver = _read_venv_python_version(repo_root)
+    if venv_ver and venv_ver != (3, 11):
+        print(f"Warning: .venv appears to be Python {venv_ver[0]}.{venv_ver[1]} but Functions worker is Python 3.11.")
+        print("This often causes binary wheels mismatch (e.g. `_cffi_backend.cp313...` not importable on 3.11).")
+        print("Fix: delete `.venv` and recreate it with Python 3.11, then reinstall requirements.")
     parser = argparse.ArgumentParser()
     parser.add_argument('--ports', nargs='*', type=int, default=[7071])
     parser.add_argument('--run-tests', action='store_true')

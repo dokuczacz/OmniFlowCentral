@@ -14,17 +14,27 @@ py -3.11 -m venv .venv
 pip install -r OmniFlowCentral/requirements.txt
 ```
 
-2) Start the Functions host (in a new PowerShell window, or run in current shell):
+If you forget to rebuild `.venv` after switching Python versions, the inline helper (`scripts/run-local.py`) now detects the mismatch, deletes the old environment, and recreates it with Python 3.11 before installing requirements.
+
+2) Start the Functions host (use whichever helper fits your workflow):
+
+- Use `scripts/run_local.py` to spawn the host, Azurite (if configured), and the Next.js chatbot each in their own window. The existing helper already assumes the `.venv` has been created during step 1.
+- Alternatively, run the new inline helper that is written in Python and mirrors the former `scripts/run-local.ps1`:
 
 ```powershell
-# from repo root
-python .\scripts\run_local.py
-# or with tests after host is healthy
-python .\scripts\run_local.py --run-tests
+# creates .venv + installs requirements if needed, starts the host, and writes the host log to logs/omniflowcentral-run.log
+python .\scripts\run-local.py --start-azurite
+# run tests after the host goes healthy
+python .\scripts\run-local.py --start-azurite --run-tests
 ```
+
+Pass `--skip-install` to `scripts/run-local.py` if you already created `.venv` manually and only want to start the runtime/test infrastructure.
 
 3) Logs:
 - Functions host logs: `logs/omniflowcentral-func-*.log`
 - Integration pytest output: `logs/tests-integration.log`
+
+- Inline helper (run-local.py) host log: `logs/omniflowcentral-run.log`
+- Inline helper tests log: `tests-integration.log`
 
 If you prefer manual steps, change directory to `OmniFlowCentral` and run `func start`.

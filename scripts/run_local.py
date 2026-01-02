@@ -121,6 +121,10 @@ def wait_for_health(url: str, timeout: int = 60) -> bool:
 
 def main():
     repo_root = get_repo_root()
+    # Recommend Python 3.11 for Azure Functions runtime compatibility
+    if sys.version_info[:2] != (3, 11):
+        print(f"Warning: running with Python {sys.version_info.major}.{sys.version_info.minor}. Recommended: Python 3.11.")
+        print("Proceeding, but consider creating a 3.11 venv (use `py -3.11 -m venv .venv`) and re-run.")
     parser = argparse.ArgumentParser()
     parser.add_argument('--ports', nargs='*', type=int, default=[7071])
     parser.add_argument('--run-tests', action='store_true')

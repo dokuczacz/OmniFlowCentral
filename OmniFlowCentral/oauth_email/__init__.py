@@ -13,7 +13,7 @@ import azure.functions as func
 import requests
 from requests import RequestException
 
-from shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
+from OmniFlowCentral.shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
 
 
 def _json_body(req: func.HttpRequest) -> Dict[str, Any]:

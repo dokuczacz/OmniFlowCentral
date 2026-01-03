@@ -41,7 +41,12 @@ class AzureConfig:
 
     CONTAINER_NAME = os.environ.get(
         "AZURE_BLOB_CONTAINER_NAME",
-        "agent-knowledge-base",
+        "omniflowcentralcustomgpt",
+    )
+
+    OAUTH_CONTAINER_NAME = os.environ.get(
+        "OMNIFLOWCENTRAL_OAUTH_CONTAINER_NAME",
+        "omniflowcentraloauth",
     )
 
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")

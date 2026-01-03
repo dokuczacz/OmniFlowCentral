@@ -2,7 +2,7 @@
 
 Date: 2026-01-02
 Owner: Mariusz
-Status: Planning (copy/adapt-first; App1 untouched)
+Status: Active (data storage/sharing + OAuth-first; no semantic search)
 
 ---
 
@@ -22,7 +22,12 @@ Status: Planning (copy/adapt-first; App1 untouched)
 Split the current Azure Functions backend into 2 isolated units:
 
 - **App1 Orchestrator**: chat brain + tool loop + WP6/WP7.
-- **App2 GPT Tools + OAuth Central**: deterministic blob CRUD tools + OAuth/Gmail/bridge.
+- **App2 GPT Tools + OAuth Central**: deterministic data storage/sharing tools + OAuth/Gmail/bridge (fast, low-read).
+
+Baseline (2026-01-02):
+- App2 is the “single-door” tool surface for Custom GPT Actions and other agents.
+- App2 is the shared data store fed from **two API sources** (tool calls + OAuth-enabled upstreams) and optimized for quick retrieval (minimal browsing in the model).
+- No semantic search or “context builder” logic lives in App2.
 
 ### Explicit exclusions from App2 (must NOT be in App2)
 - `save_interaction`
@@ -34,11 +39,12 @@ Split the current Azure Functions backend into 2 isolated units:
 
 ### Acceptance criteria
 - App1 continues to run as-is.
-- App2 uses **separate blob containers** and exposes only basic deterministic tools.
+- App2 uses **separate blob containers** and exposes only basic deterministic tools focused on fast data storage/sharing.
 - Blob CRUD tool data lives in `omniflowcentralcustomgpt`.
 - OAuth/Gmail/bridge live in App2 and use `omniflowcentraloauth`.
 - Custom GPT does not do low-level JSON token exchanges; it calls high-level tools.
 - Each tool has stable request/response JSON shapes; invalid inputs fail fast with deterministic errors.
+- App2 provides a deterministic “dataset search” that is tag/field based (no embeddings/semantic ranking), returning small result sets with hard caps/timeouts.
 
 ---
 
@@ -49,9 +55,10 @@ Split the current Azure Functions backend into 2 isolated units:
 - Owns: LLM runtime loop (`tool_call_handler`), routing,
 - Storage: existing container (unchanged) for orchestrator data
 
-### App2 — GPT Tools + OAuth Central (new repo)
+### App2 – GPT Tools + OAuth Central (new repo)
 - Owns:
   - basic blob tools (blob CRUD primitives)
+  - deterministic dataset discovery/search (tag/field filters; no semantic)
   - OAuth Central endpoints (`custom_bridge`, `oauth_email`, `gmail_oauth_callback`)
 - Storage (same Storage Account):
   - blob tools container: `omniflowcentralcustomgpt`
@@ -119,6 +126,7 @@ Rationale: keep GPT integrations isolated from App1; App1 stays untouched and Ap
 
 ### Non-goals (explicit)
 - App2 does **not** implement WP6/WP7 logic (no Context Builder, no semantic conversions, no preferences gating like `_wp6_allowed_to_read`).
+- App2 does **not** implement semantic search (no embeddings, no vector DB, no rerankers).
 - App2 does **not** attempt to cooperate with OpenAI prompts; that remains App1 responsibility.
 
 ### Quasi MCP capabilities (recommended)
@@ -245,6 +253,10 @@ CI/CD (recommended first iteration): GitHub Actions publish-profile deploy
   - `get_filtered_data`: filter correctness verified
 - Validate JSON responses are stable.
 - Validate error envelopes + error codes are stable for all validation failures (missing param, invalid tool, invalid types).
+- Current verification (local):
+  - `pytest tests/unit/test_tools_call.py tests/unit/test_tools_capabilities.py`
+  - `python scripts/verify_manifest_ops.py` (rename/remove manifest integrity)
+  - `python scripts/wp1_golden_suite.py` (end-to-end smoke for WP1 tools)
 
 ### App2 (OAuth Central)
 - `oauth_status` before authorization
@@ -282,11 +294,19 @@ Drift between apps | inconsistent behavior | copy/adapt-first + golden tests
 Each implementation step is kept under ~1000 LOC to stay reviewable (lots of copy/adapt). This is what will go into App2.
 
 Work Package | Description | LOC Estimate | Status
+
+Status snapshot (as implemented in `C:\\AI memory\\NewHope\\OmniFlowCentralRepo`, 2026-01-03):
+- WP0: ✅ Done (health endpoint present)
+- WP1: ✅ Done (blob CRUD + dataset primitives wired)
+- WP1.2: ✅ Done (manifest helpers + deterministic `dataset_search`)
+- WP3: ✅ Done (`tools/call` + `tools/capabilities`)
+- WP5: In progress (WP1 golden suite done; OAuth flows pending)
 ---|---|---|---
 WP0 – App2 skeleton | Initialize new repo (`host.json`, entrypoints, shared helpers, env var surface) and verify a simple health endpoint | 250–450 | Pending
 WP1 – Blob CRUD tools | Copy/adapt list/read/read_many/get_filtered/upload/add/update/remove/manage_files (`omniflowcentralcustomgpt` container) | 700–950 | Pending
+WP1.2 – Data storage & sharing UX | Add deterministic “dataset” conventions: stable paths, lightweight manifests/index.jsonl, and a strict `dataset_search` (tags/fields, hard caps) | 250–650 | Pending
 WP2 – OAuth Central | Copy/adapt `custom_bridge`, `oauth_email`, `gmail_oauth_callback` + auth storage to `omniflowcentraloauth` | 700–950 | Pending
-WP3 – Tool handler + capabilities | Implement `gpt_tools_handler`, `GET /api/capabilities`, tool matrix, error registry | 500–900 | Pending
+WP3 – Tool handler + capabilities | Implement `gpt_tools_handler`, `GET /api/capabilities`, allow-list/params matrix, error registry (no semantic) | 500–900 | Pending
 WP4 – Actions/OpenAPI spec | Produce new OpenAPI pointing at App2, define JSON envelopes, doc new server URL | 250–650 | Pending
 WP5 – Golden suite | Smoke script/curl for every tool + error envelope checks + OAuth flows | 300–900 | Pending
 

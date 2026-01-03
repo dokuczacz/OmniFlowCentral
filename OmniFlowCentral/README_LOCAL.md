@@ -38,3 +38,12 @@ Pass `--skip-install` to `scripts/run-local.py` if you already created `.venv` m
 - Inline helper tests log: `tests-integration.log`
 
 If you prefer manual steps, change directory to `OmniFlowCentral` and run `func start`.
+
+## local.settings.json
+`OmniFlowCentral/local.settings.json` is intentionally not tracked (contains secrets). Create it by copying:
+
+```powershell
+Copy-Item OmniFlowCentral/local.settings.template.json OmniFlowCentral/local.settings.json
+```
+
+Then fill required `GMAIL_OAUTH_*` and storage settings for local runs.

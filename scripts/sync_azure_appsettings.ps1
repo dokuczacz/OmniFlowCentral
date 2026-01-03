@@ -56,11 +56,11 @@ function Load-SettingsJson([string]$path) {
 }
 
 function Get-DefaultHostName([string]$rg, [string]$app) {
-  $host = az functionapp show -g $rg -n $app --query defaultHostName -o tsv --only-show-errors
-  if (-not $host) {
+  $defaultHostName = az functionapp show -g $rg -n $app --query properties.defaultHostName -o tsv --only-show-errors
+  if (-not $defaultHostName) {
     throw "Unable to read defaultHostName for Function App '$app' in RG '$rg'."
   }
-  return $host.Trim()
+  return $defaultHostName.Trim()
 }
 
 $requiredKeys = @(
@@ -106,8 +106,8 @@ if (-not $desired.ContainsKey("AZURE_STORAGE_CONNECTION_STRING") -and $desired.C
 }
 
 if (-not $NoProdRedirectUri) {
-  $host = Get-DefaultHostName -rg $ResourceGroup -app $FunctionAppName
-  $desired["GMAIL_OAUTH_REDIRECT_URI"] = "https://$host/api/gmail_oauth_callback"
+  $defaultHostName = Get-DefaultHostName -rg $ResourceGroup -app $FunctionAppName
+  $desired["GMAIL_OAUTH_REDIRECT_URI"] = "https://$defaultHostName/api/gmail_oauth_callback"
 }
 
 $missing = @()
@@ -143,4 +143,3 @@ if (-not $NoRestart) {
 }
 
 Write-Host "Done."
-

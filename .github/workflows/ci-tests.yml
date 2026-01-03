@@ -25,7 +25,10 @@ jobs:
   integration:
     name: Integration smoke tests
     needs: unit
-    if: ${{ secrets.AZURE_FUNCTIONS_HOST_URL && secrets.AZURE_STORAGE_CONNECTION_STRING }}
+    env:
+      AZURE_FUNCTIONS_HOST_URL: ${{ secrets.AZURE_FUNCTIONS_HOST_URL }}
+      AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+    if: ${{ env.AZURE_FUNCTIONS_HOST_URL != '' && env.AZURE_STORAGE_CONNECTION_STRING != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +40,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r OmniFlowCentral/requirements.txt pytest pytest-mock requests
       - name: Run integration tests
-        env:
-          AZURE_FUNCTIONS_HOST_URL: ${{ secrets.AZURE_FUNCTIONS_HOST_URL }}
-          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         run: pytest tests/integration -q

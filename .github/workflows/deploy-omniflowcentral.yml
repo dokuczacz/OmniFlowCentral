@@ -16,16 +16,19 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      AZURE_FUNCTIONAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Azure login (service principal)
-        if: ${{ secrets.AZURE_CREDENTIALS != '' && secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE == '' }}
+        if: ${{ env.AZURE_CREDENTIALS != '' && env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE == '' }}
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ env.AZURE_CREDENTIALS }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
@@ -41,17 +44,17 @@ jobs:
           pip install -r requirements.txt --target=".python_packages/lib/site-packages"
 
       - name: Deploy to Azure Functions (publish profile)
-        if: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE != '' }}
+        if: ${{ env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE != '' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           sku: flexconsumption
           respect-funcignore: true
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          publish-profile: ${{ env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
 
       - name: Deploy to Azure Functions (azure/login)
-        if: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE == '' && secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ env.AZURE_FUNCTIONAPP_PUBLISH_PROFILE == '' && env.AZURE_CREDENTIALS != '' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}

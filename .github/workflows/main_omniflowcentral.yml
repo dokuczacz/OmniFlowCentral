@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'OmniFlowCentral'
   PYTHON_VERSION: '3.11' # set this to the python version to use (supports 3.6, 3.7, 3.8)
 
 jobs:
@@ -32,12 +32,14 @@ jobs:
           source venv/bin/activate
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r OmniFlowCentral/requirements.txt
 
       # Optional: Add step to run tests here
 
       - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+        run: |
+          cd OmniFlowCentral
+          zip -r ../release.zip .
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -65,18 +67,12 @@ jobs:
           unzip release.zip
           rm release.zip
         
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_F555A6387E374B08A921716E1A9AF6CB }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_FD5AA404B7E549DFA0DE0A1FF2CB2BB3 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1C982A1EBEEE40BE89AB85CA8D950549 }}
-
-      - name: 'Deploy to Azure Functions'
+      - name: 'Deploy to Azure Functions (publish profile)'
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
           app-name: 'OmniFlowCentral'
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
           

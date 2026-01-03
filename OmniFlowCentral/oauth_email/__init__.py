@@ -1,5 +1,5 @@
 """
-Azure Function that exposes Microsoft OAuth for the GPT email tool.
+Azure Function that exposes Gmail OAuth for the GPT email tool.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import azure.functions as func
 import requests
 from requests import RequestException
 
-from shared.oauth_email import OAuthConfig, OAuthTokenStore
+from shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
 
 
 def _json_body(req: func.HttpRequest) -> Dict[str, Any]:
@@ -46,18 +46,18 @@ def _user_id(req: func.HttpRequest, body: Dict[str, Any]) -> str:
 
 
 def _exchange_code(code: str) -> Dict[str, Any]:
-    if not OAuthConfig.has_credentials():
-        raise ValueError("Missing OAuth configuration to request tokens")
+    if not GmailOAuthConfig.has_credentials():
+        raise ValueError("Missing Gmail OAuth configuration to request tokens")
     data = {
-        "client_id": OAuthConfig.CLIENT_ID,
-        "client_secret": OAuthConfig.CLIENT_SECRET,
+        "client_id": GmailOAuthConfig.CLIENT_ID,
+        "client_secret": GmailOAuthConfig.CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": OAuthConfig.REDIRECT_URI,
-        "scope": OAuthConfig.SCOPES,
+        "redirect_uri": GmailOAuthConfig.REDIRECT_URI,
+        "scope": GmailOAuthConfig.SCOPES,
     }
     headers = {"Accept": "application/json"}
-    response = requests.post(OAuthConfig.token_url(), data=data, headers=headers, timeout=20)
+    response = requests.post(GmailOAuthConfig.token_url(), data=data, headers=headers, timeout=20)
     response.raise_for_status()
     payload = response.json()
     payload["fetched_at"] = datetime.now(timezone.utc).isoformat()
@@ -88,19 +88,20 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     user_id = _user_id(req, body)
 
     if action == "authorize":
-        if not OAuthConfig.has_credentials():
-            return _error("OAuth tenant/client configuration is incomplete", status_code=500)
+        if not GmailOAuthConfig.has_credentials():
+            return _error("Gmail OAuth configuration is incomplete", status_code=500)
         state = str(uuid.uuid4())
         login_hint = req.params.get("login_hint") or body.get("login_hint")
         try:
-            authorize_url = OAuthConfig.authorize_url(state, login_hint=login_hint)
+            GmailTokenStore.save_state(state, user_id)
+            authorize_url = GmailOAuthConfig.authorize_url(state, login_hint=login_hint)
         except ValueError as exc:
             return _error(str(exc), status_code=500)
         return _response({
             "authorize_url": authorize_url,
             "state": state,
-            "scope": OAuthConfig.SCOPES,
-            "redirect_uri": OAuthConfig.REDIRECT_URI
+            "scope": GmailOAuthConfig.SCOPES,
+            "redirect_uri": GmailOAuthConfig.REDIRECT_URI
         })
 
     if action == "exchange":
@@ -108,8 +109,15 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         if not code:
             return _error("Missing 'code' for OAuth exchange")
         try:
+            state = req.params.get("state") or body.get("state")
+            if state:
+                state_record = GmailTokenStore.load_state(str(state))
+                if state_record and (state_user_id := state_record.get("user_id")):
+                    user_id = str(state_user_id).strip() or user_id
             token_payload = _exchange_code(code)
-            OAuthTokenStore.save_tokens(user_id, token_payload)
+            GmailTokenStore.save_tokens(user_id, token_payload)
+            if state:
+                GmailTokenStore.delete_state(str(state))
         except RequestException as exc:
             logging.error("Token exchange failed: %s", exc)
             return _error("Failed to exchange authorization code", status_code=502)
@@ -126,7 +134,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     if action == "status":
         try:
-            stored = OAuthTokenStore.load_tokens(user_id)
+            stored = GmailTokenStore.load_tokens(user_id)
         except Exception as exc:
             logging.error("Token store access failed for %s: %s", user_id, exc)
             return _error("Unable to read stored tokens", status_code=500)

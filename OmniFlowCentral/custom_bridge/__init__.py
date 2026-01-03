@@ -324,6 +324,12 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     user_id = _resolve_user_id(body)
     access_token = _bearer_token(req)
     payload = body.get("payload", {})
+
+    if action.startswith("gmail_"):
+        auth_result = handle_ensure_authorized(user_id, payload, access_token)
+        if not auth_result.get("authorized"):
+            auth_result["requested_action"] = action
+            return _response({"status": "ok", "action": action, "result": auth_result})
     try:
         result = handler(user_id, payload, access_token)
     except ValueError as exc:

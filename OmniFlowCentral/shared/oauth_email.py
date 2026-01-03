@@ -1,5 +1,5 @@
 """
-Microsoft Graph OAuth helpers for GPT email integration.
+Gmail OAuth helpers for GPT email integration.
 """
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.storage.blob import BlobServiceClient
@@ -17,53 +17,45 @@ from .config import AzureConfig
 
 
 class OAuthConfig:
-    """Settings needed to perform the Microsoft identity OAuth flow."""
+    """Settings needed to perform Gmail OAuth flows."""
 
-    TENANT_ID = os.environ.get("OAUTH_TENANT_ID", "").strip()
-    CLIENT_ID = os.environ.get("OAUTH_CLIENT_ID", "").strip()
-    CLIENT_SECRET = os.environ.get("OAUTH_CLIENT_SECRET", "").strip()
-    REDIRECT_URI = os.environ.get(
-        "OAUTH_REDIRECT_URI",
-        "https://login.microsoftonline.com/common/oauth2/nativeclient"
-    ).strip()
-    SCOPES = os.environ.get(
-        "OAUTH_SCOPES",
-        "https://graph.microsoft.com/Mail.ReadWrite offline_access openid profile"
-    ).strip()
-    RESPONSE_MODE = os.environ.get("OAUTH_RESPONSE_MODE", "query").strip()
-    PROMPT = os.environ.get("OAUTH_PROMPT", "consent").strip()
+    CLIENT_ID = os.environ.get("GMAIL_OAUTH_CLIENT_ID", "").strip()
+    CLIENT_SECRET = os.environ.get("GMAIL_OAUTH_CLIENT_SECRET", "").strip()
+    REDIRECT_URI = os.environ.get("GMAIL_OAUTH_REDIRECT_URI", "").strip()
+    SCOPES = os.environ.get("GMAIL_OAUTH_SCOPES", "https://mail.google.com/").strip()
+    PROMPT = os.environ.get("GMAIL_OAUTH_PROMPT", "consent").strip()
+    RESPONSE_TYPE = "code"
+    RESPONSE_MODE = "query"
 
     @classmethod
     def has_credentials(cls) -> bool:
-        return all([cls.TENANT_ID, cls.CLIENT_ID, cls.CLIENT_SECRET])
+        return bool(cls.CLIENT_ID and cls.CLIENT_SECRET and cls.REDIRECT_URI)
 
     @classmethod
     def authorize_url(cls, state: str, *, login_hint: Optional[str] = None) -> str:
         if not cls.has_credentials():
-            raise ValueError("Missing OAuth tenant/client configuration")
+            raise ValueError("Missing Gmail OAuth configuration")
         params = {
             "client_id": cls.CLIENT_ID,
-            "response_type": "code",
-            "response_mode": cls.RESPONSE_MODE,
             "redirect_uri": cls.REDIRECT_URI,
+            "response_type": cls.RESPONSE_TYPE,
             "scope": cls.SCOPES,
+            "access_type": "offline",
             "prompt": cls.PROMPT,
             "state": state,
         }
         if login_hint:
             params["login_hint"] = login_hint
-        query = urlencode({k: v for k, v in params.items() if v is not None})
-        return f"https://login.microsoftonline.com/{cls.TENANT_ID}/oauth2/v2.0/authorize?{query}"
+        query = "&".join(f"{k}={quote(str(v), safe='')}" for k, v in params.items() if v)
+        return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
     @classmethod
     def token_url(cls) -> str:
-        if not cls.TENANT_ID:
-            raise ValueError("Missing OAUTH_TENANT_ID")
-        return f"https://login.microsoftonline.com/{cls.TENANT_ID}/oauth2/v2.0/token"
+        return "https://oauth2.googleapis.com/token"
 
 
 class OAuthTokenStore:
-    """Simple blob-backed token persistence for the GPT email helper."""
+    """Simple blob-backed token persistence for the Gmail helper."""
 
     BLOB_PREFIX = "gpt-email/oauth_tokens"
 

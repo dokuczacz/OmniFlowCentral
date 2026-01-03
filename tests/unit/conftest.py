@@ -12,9 +12,10 @@ if _repo_root not in sys.path:
 
 
 class FakeReq:
-    def __init__(self, params=None, json_body=None):
+    def __init__(self, params=None, json_body=None, headers=None):
         self._params = params or {}
         self._json = json_body
+        self.headers = headers or {}
 
     @property
     def params(self):
@@ -28,8 +29,11 @@ class FakeReq:
 
 @pytest.fixture
 def fake_req():
-    def _make(params=None, json_body=None):
-        return FakeReq(params=params, json_body=json_body)
+    def _make(params=None, json_body=None, headers=None):
+        default_headers = {"X-User-Id": "alice"}
+        if headers is not None:
+            default_headers = headers
+        return FakeReq(params=params, json_body=json_body, headers=default_headers)
 
     return _make
 

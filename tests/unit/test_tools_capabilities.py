@@ -1,6 +1,7 @@
 import json
 
 import OmniFlowCentral.tools_capabilities as tc
+from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
 
 
 def test_tools_capabilities_returns_list():
@@ -13,4 +14,4 @@ def test_tools_capabilities_returns_list():
     assert 'capabilities' in data
     names = [c.get('name') for c in data['capabilities']]
     assert 'list_blobs' in names
-    assert 'get_blob' in names
+    assert set(names) == set(TOOL_SPECS.keys())

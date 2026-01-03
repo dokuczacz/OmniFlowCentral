@@ -3,7 +3,27 @@ import logging
 
 import azure.functions as func
 
-from OmniFlowCentral.shared.blob_ops import ToolError, delete_blob, list_blobs, upload_blob
+from OmniFlowCentral.shared.blob_ops import (
+    ToolError,
+    DEFAULT_MAX_BYTES_PER_FILE,
+    DEFAULT_READ_MANY_FILES,
+    DEFAULT_TAIL_BYTES,
+    DEFAULT_TAIL_LINES,
+    delete_blob,
+    get_filtered_data,
+    list_blobs,
+    read_blob,
+    read_many_blobs,
+    upload_blob,
+)
+from OmniFlowCentral.shared.data_ops import (
+    add_new_data,
+    dataset_search,
+    manage_files,
+    remove_data_entry,
+    update_data_entry,
+    upload_data_or_file,
+)
 from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
 from OmniFlowCentral.shared.request_contract import parse_request
 from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
@@ -77,10 +97,82 @@ def _handle_delete(params, user_id):
     return delete_blob(name=name, user_id=user_id)
 
 
+def _handle_read_blob(params, user_id):
+    name = _require_param(params, "name")
+    return read_blob(user_id=user_id, name=name)
+
+
+def _handle_get_filtered_data(params, user_id):
+    blob_name = params.get("target_blob_name") or params.get("blob_name") or params.get("file_name")
+    if not blob_name:
+        raise ToolError("MISSING_PARAM", "Missing 'target_blob_name' parameter.")
+    filter_key = params.get("filter_key")
+    filter_value = params.get("filter_value")
+    return get_filtered_data(
+        user_id=user_id,
+        blob_name=blob_name,
+        filter_key=filter_key,
+        filter_value=filter_value,
+    )
+
+
+def _handle_read_many_blobs(params, user_id):
+    files = params.get("files")
+    if files is None:
+        raise ToolError("MISSING_PARAM", "Missing 'files' parameter.")
+    tail_lines = _as_int(params.get("tail_lines"), DEFAULT_TAIL_LINES)
+    tail_bytes = _as_int(params.get("tail_bytes"), DEFAULT_TAIL_BYTES)
+    max_bytes = _as_int(params.get("max_bytes_per_file"), DEFAULT_MAX_BYTES_PER_FILE)
+    parse_json = _as_bool(params.get("parse_json"), True)
+    max_files = _as_int(params.get("max_files"), DEFAULT_READ_MANY_FILES)
+    return read_many_blobs(
+        user_id=user_id,
+        files=files,
+        tail_lines=tail_lines,
+        tail_bytes=tail_bytes,
+        max_bytes_per_file=max_bytes,
+        parse_json=parse_json,
+        max_files=max_files,
+    )
+
+
+def _handle_upload_data_or_file(params, user_id):
+    return upload_data_or_file(user_id=user_id, params=params)
+
+
+def _handle_add_new_data(params, user_id):
+    return add_new_data(user_id=user_id, params=params)
+
+
+def _handle_update_data_entry(params, user_id):
+    return update_data_entry(user_id=user_id, params=params)
+
+
+def _handle_remove_data_entry(params, user_id):
+    return remove_data_entry(user_id=user_id, params=params)
+
+
+def _handle_manage_files(params, user_id):
+    return manage_files(user_id=user_id, params=params)
+
+
+def _handle_dataset_search(params, user_id):
+    return dataset_search(user_id=user_id, params=params or {})
+
+
 TOOL_HANDLERS = {
     "list_blobs": _handle_list_blobs,
     "upload_blob": _handle_upload,
     "delete_blob": _handle_delete,
+    "read_blob": _handle_read_blob,
+    "read_many_blobs": _handle_read_many_blobs,
+    "get_filtered_data": _handle_get_filtered_data,
+    "upload_data_or_file": _handle_upload_data_or_file,
+    "add_new_data": _handle_add_new_data,
+    "update_data_entry": _handle_update_data_entry,
+    "remove_data_entry": _handle_remove_data_entry,
+    "manage_files": _handle_manage_files,
+    "dataset_search": _handle_dataset_search,
 }
 
 

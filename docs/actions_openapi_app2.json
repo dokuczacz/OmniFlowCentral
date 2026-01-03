@@ -1,0 +1,376 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OmniFlow Central GPT Tools",
+    "version": "0.1.0",
+    "description": "Single-door OpenAPI for App2 GPT tools handler."
+  },
+  "servers": [
+    {
+      "url": "https://<app2-name>.azurewebsites.net"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "functionKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-functions-key",
+        "description": "Use x-functions-key or code query param for authentication."
+      }
+    },
+    "schemas": {
+      "ToolCallRequest": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "$ref": "#/components/schemas/ToolName"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "additionalProperties": false
+      },
+      "ToolName": {
+        "type": "string",
+        "enum": [
+          "list_blobs",
+          "upload_blob",
+          "delete_blob",
+          "read_blob",
+          "read_many_blobs",
+          "get_filtered_data",
+          "upload_data_or_file",
+          "add_new_data",
+          "update_data_entry",
+          "remove_data_entry",
+          "manage_files",
+          "dataset_search"
+        ],
+        "description": "Enum derived from OmniFlowCentral/shared/tool_specs.py."
+      },
+      "ToolCallResponseSuccess": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "success"
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "result": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ToolCallResponseError": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "error"
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "tool": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "trace_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "error",
+          "tool",
+          "user_id"
+        ],
+        "additionalProperties": false
+      },
+      "CapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+    "HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        }
+      }
+    }
+    },
+    "examples": {
+      "ListBlobsRequest": {
+        "summary": "Typical list call",
+        "value": {
+          "tool": "list_blobs",
+          "params": { "prefix": "users/alice/", "max_results": 50 },
+          "user_id": "alice"
+        }
+      },
+      "UploadDataRequest": {
+        "summary": "Upload metadata with manifest sync",
+        "value": {
+          "tool": "upload_data_or_file",
+          "params": {
+            "target_blob_name": "users/alice/records.json",
+            "file_content": "{\"id\":\"rec1\"}",
+            "display_name": "Records",
+            "tags": ["records", "app1"],
+            "category": "dataset"
+          },
+          "trace_id": "trace-123"
+        }
+      },
+      "DatasetSearchRequest": {
+        "summary": "Search manifest entries by tag",
+        "value": {
+          "tool": "dataset_search",
+          "params": { "tags_any": ["records"], "limit": 5 },
+          "user_id": "alice"
+        }
+      },
+      "ReadManyBlobsRequest": {
+        "summary": "Read multiple blobs with truncation limits",
+        "value": {
+          "tool": "read_many_blobs",
+          "params": {
+            "files": ["users/alice/records.json", "users/alice/notes.json"],
+            "max_bytes_per_file": 262144,
+            "parse_json": true
+          },
+          "user_id": "alice"
+        }
+      },
+      "ManageFilesRequest": {
+        "summary": "Rename a file",
+        "value": {
+          "tool": "manage_files",
+          "params": {
+            "operation": "rename",
+            "source_name": "users/alice/draft.md",
+            "target_name": "users/alice/draft_latest.md"
+          },
+          "user_id": "alice"
+        }
+      },
+      "UpdateDataEntryRequest": {
+        "summary": "Update a record in an array blob",
+        "value": {
+          "tool": "update_data_entry",
+          "params": {
+            "target_blob_name": "users/alice/records.json",
+            "find_key": "id",
+            "find_value": "rec1",
+            "update_key": "status",
+            "update_value": "done"
+          },
+          "user_id": "alice"
+        }
+      },
+      "ListBlobsSuccess": {
+        "summary": "Successful list_blobs result",
+        "value": {
+          "status": "success",
+          "tool": "list_blobs",
+          "user_id": "alice",
+          "result": {
+            "items": [{ "name": "users/alice/records.json", "size": 128 }]
+          }
+        }
+      },
+      "InvalidToolError": {
+        "summary": "Invalid tool envelope",
+        "value": {
+          "status": "error",
+          "tool": "unknown_tool",
+          "user_id": "alice",
+          "error": "INVALID_TOOL",
+          "message": "Unsupported tool 'unknown_tool'.",
+          "details": {}
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "functionKey": []
+    }
+  ],
+  "paths": {
+    "/api/tools/call": {
+      "post": {
+        "operationId": "tools_call",
+        "summary": "Single gateway for GPT tool execution.",
+        "security": [
+          {
+            "functionKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallRequest"
+              }
+              ,
+              "examples": {
+                "list_blobs": {
+                  "$ref": "#/components/examples/ListBlobsRequest"
+                },
+                "upload_data": {
+                  "$ref": "#/components/examples/UploadDataRequest"
+                },
+                "dataset_search": {
+                  "$ref": "#/components/examples/DatasetSearchRequest"
+                },
+                "read_many_blobs": {
+                  "$ref": "#/components/examples/ReadManyBlobsRequest"
+                },
+                "manage_files": {
+                  "$ref": "#/components/examples/ManageFilesRequest"
+                },
+                "update_data_entry": {
+                  "$ref": "#/components/examples/UpdateDataEntryRequest"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+          "description": "Tool result envelope.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallResponseSuccess"
+              }
+              ,
+              "examples": {
+                "list_blobs_result": {
+                  "$ref": "#/components/examples/ListBlobsSuccess"
+                }
+              }
+            }
+          }
+        },
+        "default": {
+          "description": "Error envelope",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallResponseError"
+              }
+              ,
+              "examples": {
+                "invalid_tool": {
+                  "$ref": "#/components/examples/InvalidToolError"
+                }
+              }
+            }
+          }
+        }
+        }
+      }
+    },
+    "/api/tools/capabilities": {
+      "get": {
+        "operationId": "tools_capabilities",
+        "summary": "List available tools and params.",
+        "security": [
+          {
+            "functionKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tool metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilitiesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Optional health check",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

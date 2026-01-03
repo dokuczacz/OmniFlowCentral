@@ -1,0 +1,20 @@
+{
+  "bindings": [
+    {
+      "authLevel": "anonymous",
+      "methods": [
+        "get"
+      ],
+      "name": "req",
+      "direction": "in",
+      "type": "httpTrigger"
+    },
+    {
+      "direction": "out",
+      "name": "$return",
+      "type": "http"
+    }
+  ],
+  "entryPoint": "main",
+  "scriptFile": "__init__.py"
+}

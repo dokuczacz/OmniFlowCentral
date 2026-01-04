@@ -46,6 +46,19 @@ Both HTTP triggers are `authLevel: function`.
 - Single-door spec: `docs/actions_openapi_app2.json`
 - Use the raw GitHub URL to that file when importing into GPT Builder (server URL must point to the deployed App2 Function App).
 
+## Data import (ELI / Sejm)
+
+Script: `scripts/eli_dump_to_blob.py`
+
+Example (quick try: few pages to Azurite; uploads to storage configured via env vars):
+
+```powershell
+$env:AzureWebJobsStorage = "UseDevelopmentStorage=true"
+$env:AZURE_BLOB_CONTAINER_NAME = "omniflowcentralcustomgpt"
+
+python .\\scripts\\eli_dump_to_blob.py --max-pages 3 --write-index-jsonl
+```
+
 ## CI/CD (GitHub Actions)
 
 Workflow: `.github/workflows/deploy-omniflowcentral.yml`

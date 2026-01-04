@@ -10,11 +10,11 @@ import mimetypes
 import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import azure.functions as func
 import requests
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import AzureError, ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient
 
 from OmniFlowCentral.shared.config import AzureConfig
@@ -143,6 +143,69 @@ def _exchange_code(code: str) -> Dict[str, Any]:
         raise ValueError(f"Token exchange failed (status={status})") from exc
 
 
+class PendingActionStore:
+    """Stores the pending gmail action while waiting for OAuth consent."""
+
+    BLOB_PREFIX = "gmail/pending"
+
+    @classmethod
+    def _blob_client(cls, state: str):
+        if not state or not isinstance(state, str) or not state.strip():
+            raise ValueError("state is required for pending action storage")
+        if not AzureConfig.CONNECTION_STRING:
+            raise ValueError("Azure storage connection string is missing")
+        blob_service_client = BlobServiceClient.from_connection_string(AzureConfig.CONNECTION_STRING)
+        container_client = blob_service_client.get_container_client(AzureConfig.OAUTH_CONTAINER_NAME)
+        try:
+            container_client.get_container_properties()
+        except ResourceNotFoundError:
+            try:
+                blob_service_client.create_container(AzureConfig.OAUTH_CONTAINER_NAME)
+            except ResourceExistsError:
+                pass
+            except AzureError as exc:
+                logging.error("Could not create OAuth container %s: %s", AzureConfig.OAUTH_CONTAINER_NAME, exc)
+                raise
+            container_client = blob_service_client.get_container_client(AzureConfig.OAUTH_CONTAINER_NAME)
+        safe_state = state.strip().replace("/", "_").replace("\\", "_")
+        blob_path = f"{cls.BLOB_PREFIX}/{safe_state}.json"
+        return container_client.get_blob_client(blob_path)
+
+    @classmethod
+    def save(cls, state: str, action: str, payload: Dict[str, Any]) -> None:
+        blob_client = cls._blob_client(state)
+        record = {
+            "state": state,
+            "action": action,
+            "payload": payload or {},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        blob_client.upload_blob(json.dumps(record, ensure_ascii=False).encode("utf-8"), overwrite=True)
+
+    @classmethod
+    def load(cls, state: str) -> Optional[Dict[str, Any]]:
+        blob_client = cls._blob_client(state)
+        try:
+            raw = blob_client.download_blob().readall().decode("utf-8")
+            return json.loads(raw)
+        except ResourceNotFoundError:
+            return None
+        except AzureError as exc:
+            logging.error("Failed to load pending action %s: %s", state, exc)
+            raise
+
+    @classmethod
+    def delete(cls, state: str) -> None:
+        blob_client = cls._blob_client(state)
+        try:
+            blob_client.delete_blob()
+        except ResourceNotFoundError:
+            return
+        except AzureError as exc:
+            logging.error("Failed to delete pending action %s: %s", state, exc)
+            raise
+
+
 def handle_oauth_authorize(user_id: str, payload: Dict[str, Any], __: str | None = None) -> Dict[str, Any]:
     if not GmailOAuthConfig.has_credentials():
         raise ValueError("Gmail OAuth configuration is incomplete")
@@ -165,7 +228,27 @@ def handle_oauth_exchange(user_id: str, payload: Dict[str, Any], __: str | None 
         raise ValueError("code is required for oauth_exchange")
     token_payload = _exchange_code(code)
     GmailTokenStore.save_tokens(user_id, token_payload)
-    return {
+    pending_action_result: Optional[Dict[str, Any]] = None
+    state = payload.get("state") or payload.get("payload", {}).get("state")
+    if state:
+        pending_record = PendingActionStore.load(state)
+        if pending_record:
+            action_name = pending_record.get("action")
+            pending_payload = pending_record.get("payload") or {}
+            handler = ACTION_HANDLERS.get(action_name or "")
+            if handler and action_name and action_name.startswith("gmail_"):
+                try:
+                    pending_action_result = handler(user_id, pending_payload, token_payload.get("access_token"))
+                except Exception as exc:
+                    logging.error("Replay of pending action %s failed: %s", action_name, exc, exc_info=True)
+                    pending_action_result = {
+                        "action": action_name,
+                        "status": "error",
+                        "message": str(exc),
+                    }
+            PendingActionStore.delete(state)
+        GmailTokenStore.delete_state(state)
+    result = {
         "action": "oauth_exchange",
         "status": "authorized",
         "user_id": user_id,
@@ -173,6 +256,9 @@ def handle_oauth_exchange(user_id: str, payload: Dict[str, Any], __: str | None 
         "expires_at": token_payload.get("expires_at"),
         "token_type": token_payload.get("token_type"),
     }
+    if pending_action_result:
+        result["pending_action"] = pending_action_result
+    return result
 
 
 def handle_oauth_status(user_id: str, _: Dict[str, Any], __: str | None = None) -> Dict[str, Any]:
@@ -329,7 +415,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         auth_result = handle_ensure_authorized(user_id, payload, access_token)
         if not auth_result.get("authorized"):
             auth_result["requested_action"] = action
-            return _response({"status": "ok", "action": action, "result": auth_result})
+            state = auth_result.get("state")
+            if state:
+                PendingActionStore.save(state, action, payload)
+            return _response({"status": "ok", "action": "ensure_authorized", "result": auth_result})
     try:
         result = handler(user_id, payload, access_token)
     except ValueError as exc:

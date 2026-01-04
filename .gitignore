@@ -8,3 +8,5 @@ __pycache__/
 logs/
 
 OmniFlowCentral/local.settings.json
+OmniFlowCentral/OmniFlowCentral/local.settings.json
+.azurite/

@@ -1,0 +1,215 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OmniFlowCentral Custom Bridge",
+    "version": "0.1.0",
+    "description": "Single endpoint used by Custom GPT to interact with Gmail via the Custom Bridge. Authorization occurs automatically; when no token is present, the response instructs the agent to present the Gmail consent URL."
+  },
+  "servers": [
+    {
+      "url": "https://{host}",
+      "variables": {
+        "host": {
+          "default": "omniflowcentral-bagkbfera7d0hncc.switzerlandnorth-01.azurewebsites.net"
+        }
+      }
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "functionKey": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "code",
+        "description": "Function key that authorizes the call."
+      }
+    },
+    "schemas": {
+      "CustomBridgeRequest": {
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Action to invoke (e.g., gmail_list, gmail_send, gmail_attachment, etc.)"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Parameters for the action. Each action defines its own expected payload.",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "EnsureAuthorizedPayload": {
+        "type": "object",
+        "properties": {
+          "authorize_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL that users must open to finish Gmail consent."
+          },
+          "state": {
+            "type": "string",
+            "description": "State token that ties the pending action to the OAuth callback."
+          },
+          "requested_action": {
+            "type": "string",
+            "description": "Original Gmail action that triggered the authorization flow."
+          },
+          "redirect_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "authorized": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "CustomBridgeResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "action"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "result": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "pending_action": {
+            "type": "object",
+            "description": "Result returned while replaying the pending Gmail action after consent.",
+            "additionalProperties": true
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-facing message when status is error."
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/custom_bridge": {
+      "post": {
+        "summary": "Dispatch Gmail actions with implicit OAuth gating.",
+        "description": "Custom GPT calls this endpoint with the desired Gmail action. If tokens are missing, the response includes an authorize_url/state and the request is not executed until consent is obtained.",
+        "security": [
+          {
+            "functionKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional user namespace; defaults to 'default'."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomBridgeRequest"
+              },
+              "examples": {
+                "gmail_list": {
+                  "value": {
+                    "action": "gmail_list",
+                    "payload": {
+                      "max_results": 3
+                    }
+                  }
+                },
+                "gmail_send": {
+                  "value": {
+                    "action": "gmail_send",
+                    "payload": {
+                      "to": "user@example.com",
+                      "subject": "Test",
+                      "body": "Hello from GPT"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action accepted or authorization pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomBridgeResponse"
+                },
+                "examples": {
+                  "authorization_required": {
+                    "value": {
+                      "status": "ok",
+                      "action": "ensure_authorized",
+                      "result": {
+                        "authorized": false,
+                        "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth?…",
+                        "state": "uuid",
+                        "redirect_uri": "https://<host>/api/gmail_oauth_callback",
+                        "scope": "https://mail.google.com/",
+                        "user_id": "default",
+                        "requested_action": "gmail_list"
+                      }
+                    }
+                  },
+                  "gmail_list_result": {
+                    "value": {
+                      "status": "ok",
+                      "action": "gmail_list",
+                      "result": {
+                        "messages": [
+                          {
+                            "id": "abc123",
+                            "threadId": "abc123"
+                          }
+                        ],
+                        "result_size_estimate": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid function key."
+          },
+          "400": {
+            "description": "Validation failure (missing action or payload)."
+          }
+        }
+      }
+    }
+  }
+}

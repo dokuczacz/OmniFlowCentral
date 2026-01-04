@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional
 from urllib.parse import quote
 
-from azure.core.exceptions import ResourceNotFoundError, AzureError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError, AzureError
 from azure.storage.blob import BlobServiceClient
 
 from .config import AzureConfig
@@ -96,9 +96,11 @@ class GmailTokenStore:
             container_client.get_container_properties()
         except ResourceNotFoundError:
             try:
-                blob_service_client.create_container(AzureConfig.CONTAINER_NAME)
+                blob_service_client.create_container(AzureConfig.OAUTH_CONTAINER_NAME)
+            except ResourceExistsError:
+                pass
             except AzureError as exc:
-                logging.error("Could not create container %s: %s", AzureConfig.CONTAINER_NAME, exc)
+                logging.error("Could not create container %s: %s", AzureConfig.OAUTH_CONTAINER_NAME, exc)
                 raise
         container_client = blob_service_client.get_container_client(AzureConfig.OAUTH_CONTAINER_NAME)
         safe_state = state.strip().replace("/", "_").replace("\\", "_")

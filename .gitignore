@@ -29,6 +29,17 @@ __queuestorage__/
 __tablestorage__/
 AzuriteConfig
 
+# Local OmniFlowCentral templates / generated
+OmniFlowCentral/OmniFlowCentral/local.settings.template.json
+OmniFlowCentral/OmniFlowCentral/local.settings.json
+OmniFlowCentral/OmniFlowCentral/host.json
+OmniFlowCentral/OmniFlowCentral/.funcignore
+
+# Ignore IDE/venv/test caches
+.pytest_cache/
+.coverage
+
+
 # Logs
 logs/
 *.log

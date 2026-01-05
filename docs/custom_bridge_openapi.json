@@ -208,7 +208,8 @@
           "400": {
             "description": "Validation failure (missing action or payload)."
           }
-        }
+        },
+        "operationId": "customBridgePost"
       }
     }
   }

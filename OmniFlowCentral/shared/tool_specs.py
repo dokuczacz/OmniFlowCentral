@@ -123,4 +123,15 @@ TOOL_SPECS = {
             "cursor": "optional string (updated_at|blob_name)",
         },
     },
+    "eli_acts_query": {
+        "description": "Query the Sejm ELI acts dataset (public dataset of Polish legislative acts).",
+        "method": "POST",
+        "params": {
+            "q": "optional string (search in title)",
+            "year": "optional int (filter by year)",
+            "publisher": "optional string (filter by publisher)",
+            "status": "optional string (filter by status)",
+            "limit": "optional int (default 10, max 50)",
+        },
+    },
 }

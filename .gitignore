@@ -1,12 +1,45 @@
-﻿
-
-# Python
+﻿# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
 
+# Azure Functions
+local.settings.json
+*.user
+.python_packages/
+bin/
+obj/
 
-logs/
-
-OmniFlowCentral/local.settings.json
-OmniFlowCentral/OmniFlowCentral/local.settings.json
+# Azurite (local storage emulator)
 .azurite/
+__azurite_db_*.json
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+AzuriteConfig
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

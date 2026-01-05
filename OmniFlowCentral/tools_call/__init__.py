@@ -19,6 +19,7 @@ from OmniFlowCentral.shared.blob_ops import (
 from OmniFlowCentral.shared.data_ops import (
     add_new_data,
     dataset_search,
+    eli_acts_query,
     manage_files,
     remove_data_entry,
     update_data_entry,
@@ -26,6 +27,7 @@ from OmniFlowCentral.shared.data_ops import (
 )
 from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
 from OmniFlowCentral.shared.request_contract import parse_request
+from OmniFlowCentral.shared.tool_catalog import canonical_tool_name, apply_param_aliases
 from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
 from OmniFlowCentral.shared.user_validator import UserValidator
 from OmniFlowCentral.shared.response import json_response
@@ -160,6 +162,10 @@ def _handle_dataset_search(params, user_id):
     return dataset_search(user_id=user_id, params=params or {})
 
 
+def _handle_eli_acts_query(params, user_id):
+    return eli_acts_query(params=params or {})
+
+
 TOOL_HANDLERS = {
     "list_blobs": _handle_list_blobs,
     "upload_blob": _handle_upload,
@@ -173,7 +179,19 @@ TOOL_HANDLERS = {
     "remove_data_entry": _handle_remove_data_entry,
     "manage_files": _handle_manage_files,
     "dataset_search": _handle_dataset_search,
+    "eli_acts_query": _handle_eli_acts_query,
 }
+
+
+def _normalize_tool_and_params(contract: dict) -> tuple[str, dict]:
+    """Resolve canonical tool name and apply any supported parameter aliases."""
+    raw_tool = contract.get("tool") or ""
+    canonical = canonical_tool_name(raw_tool)
+    params = contract.get("payload", {}).get("params")
+    if not isinstance(params, dict):
+        params = contract.get("payload", {})
+    params = apply_param_aliases(canonical, params)
+    return canonical, params
 
 
 def _error_response(tool, user_id, trace_id, exc: ToolError) -> func.HttpResponse:
@@ -195,9 +213,9 @@ def _success_response(tool, user_id, trace_id, result: dict) -> func.HttpRespons
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("gpt_tools_handler: received request")
     contract = parse_request(req)
-    tool = contract.get("tool") or ""
     payload = contract.get("payload") or {}
     trace_id = payload.get("trace_id")
+    tool, params = _normalize_tool_and_params(contract)
 
     if not tool:
         error = ToolError("MISSING_PARAM", "Missing 'tool' parameter.")
@@ -217,9 +235,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         if not UserValidator.validate_user_id(user_id):
             raise ToolError("VALIDATION_FAILED", "User identifier failed validation.")
 
-        params = payload.get("params")
-        if not isinstance(params, dict):
-            params = payload
+        params = params or {}
         result = handler(params, user_id)
         return _success_response(tool, user_id, trace_id, result)
     except ToolError as exc:

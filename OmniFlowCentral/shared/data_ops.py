@@ -581,3 +581,109 @@ def dataset_search(user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
         "hits": results,
     }
     return response
+
+
+def eli_acts_query(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Query the public ELI acts dataset stored in users/public/datasets/eli_acts/index/acts_inforce_1.jsonl.
+    
+    Supports filters: q (title search), year, publisher, status, limit.
+    Returns matching ActInfo records with ELI, title, status, dates, etc.
+    """
+    q = str(params.get("q") or "").strip().lower()
+    year = params.get("year")
+    publisher = str(params.get("publisher") or "").strip().upper()
+    status = str(params.get("status") or "").strip().lower()
+    limit = params.get("limit")
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    
+    # Read the JSONL index from public namespace
+    container_client = _connect_container()
+    index_blob_name = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    
+    try:
+        blob_client = container_client.get_blob_client(index_blob_name)
+        raw_data = blob_client.download_blob().readall()
+        lines = raw_data.decode("utf-8").strip().split("\n")
+    except ResourceNotFoundError:
+        raise ToolError(
+            "NOT_FOUND",
+            f"ELI acts index not found at {index_blob_name}. Please run eli_dump_to_blob.py first.",
+        )
+    except AzureError as exc:
+        logging.exception("eli_acts_query: failed to read index")
+        raise ToolError(
+            "UPSTREAM_ERROR",
+            "Unable to read ELI acts index.",
+            {"detail": str(exc)},
+            status=502,
+        )
+    
+    # Filter and collect results
+    results: List[Dict[str, Any]] = []
+    total_scanned = 0
+    
+    for line in lines:
+        if not line.strip():
+            continue
+        total_scanned += 1
+        try:
+            act = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+            
+        # Apply filters
+        if year is not None:
+            try:
+                if act.get("year") != int(year):
+                    continue
+            except (TypeError, ValueError):
+                continue
+                
+        if publisher and act.get("publisher", "").upper() != publisher:
+            continue
+            
+        if status and act.get("status", "").lower() != status:
+            continue
+            
+        if q:
+            title = act.get("title", "").lower()
+            if q not in title:
+                continue
+        
+        # Build result entry
+        hit = {
+            "ELI": act.get("ELI"),
+            "title": act.get("title"),
+            "publisher": act.get("publisher"),
+            "year": act.get("year"),
+            "pos": act.get("pos"),
+            "status": act.get("status"),
+            "displayAddress": act.get("displayAddress"),
+            "promulgation": act.get("promulgation"),
+            "announcementDate": act.get("announcementDate"),
+            "changeDate": act.get("changeDate"),
+            "type": act.get("type"),
+        }
+        results.append(hit)
+        
+        if len(results) >= limit:
+            break
+    
+    response = {
+        "status": "success",
+        "dataset": "eli_acts",
+        "total_scanned": total_scanned,
+        "total_returned": len(results),
+        "limit": limit,
+        "hits": results,
+        "provenance": {
+            "blob_path": index_blob_name,
+            "source": "https://api.sejm.gov.pl/eli/acts/search",
+        },
+    }
+    return response

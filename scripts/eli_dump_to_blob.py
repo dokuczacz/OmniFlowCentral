@@ -14,9 +14,8 @@ from azure.core.exceptions import ResourceExistsError
 from azure.storage.blob import BlobServiceClient
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_APP2_ROOT = _REPO_ROOT / "OmniFlowCentral"
-if str(_APP2_ROOT) not in sys.path:
-    sys.path.insert(0, str(_APP2_ROOT))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from OmniFlowCentral.shared.blob_ops import ToolError, upload_blob
 from OmniFlowCentral.shared.config import AzureConfig

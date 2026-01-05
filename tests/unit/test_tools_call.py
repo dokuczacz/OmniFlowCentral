@@ -48,6 +48,22 @@ def test_tools_call_list_blobs_default_user(fake_req):
         assert mock_list.call_args.kwargs["user_id"] == "default"
 
 
+def test_tools_call_read_blob_file_alias(fake_req):
+    expected = {"file_name": "notes.json", "data": {"foo": "bar"}}
+    with patch("OmniFlowCentral.tools_call.read_blob", return_value=expected) as mock_read:
+        req = fake_req(
+            json_body={"tool": "read_blob_file", "params": {"file_name": "notes.json"}},
+        )
+        resp = tools_call.main(req)
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body().decode("utf-8"))
+        assert body["result"] == expected
+        mock_read.assert_called_once()
+        call_kwargs = mock_read.call_args.kwargs
+        assert call_kwargs["user_id"] == "alice"
+        assert call_kwargs["name"] == "notes.json"
+
+
 def test_tools_call_read_many_blobs(fake_req):
     expected = {"items": [], "count": 0, "errors": 0, "total_bytes": 0}
     with patch("OmniFlowCentral.tools_call.read_many_blobs", return_value=expected) as mock_read:

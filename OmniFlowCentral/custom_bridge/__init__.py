@@ -17,9 +17,9 @@ import requests
 from azure.core.exceptions import AzureError, ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient
 
-from OmniFlowCentral.shared.config import AzureConfig
-from OmniFlowCentral.shared.gmail_client import GmailClient
-from OmniFlowCentral.shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
+from shared.config import AzureConfig
+from shared.gmail_client import GmailClient
+from shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
 
 
 def _parse_json(req: func.HttpRequest) -> Dict[str, Any]:

@@ -11,7 +11,7 @@ from typing import Any, Dict
 import azure.functions as func
 import requests
 
-from OmniFlowCentral.shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
+from shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
 
 
 def _response(payload: Dict[str, Any], status_code: int = 200) -> func.HttpResponse:

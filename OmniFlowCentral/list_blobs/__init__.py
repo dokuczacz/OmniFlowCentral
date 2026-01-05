@@ -2,11 +2,11 @@ import logging
 
 import azure.functions as func
 
-from OmniFlowCentral.shared.blob_ops import ToolError, list_blobs
-from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
-from OmniFlowCentral.shared.request_contract import parse_request
-from OmniFlowCentral.shared.response import json_response
-from OmniFlowCentral.shared.user_validator import extract_user_id
+from shared.blob_ops import ToolError, list_blobs
+from shared.error_codes import build_error_payload, get_status_code
+from shared.request_contract import parse_request
+from shared.response import json_response
+from shared.user_validator import extract_user_id
 
 DEFAULT_MAX_RESULTS = 200
 DEFAULT_TIMEOUT_SECONDS = 10

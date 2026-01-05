@@ -6,9 +6,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
-from OmniFlowCentral.shared.blob_ops import ToolError
-from OmniFlowCentral.shared.config import AzureConfig
-from OmniFlowCentral.shared.manifest_helper import (
+from shared.blob_ops import ToolError
+from shared.config import AzureConfig
+from shared.manifest_helper import (
     build_manifest_entry,
     load_manifest,
     remove_manifest_entry,

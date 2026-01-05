@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from OmniFlowCentral.shared.blob_ops import (
+from shared.blob_ops import (
     DEFAULT_MAX_BYTES_PER_FILE,
     DEFAULT_MAX_RESULTS,
     DEFAULT_READ_MANY_FILES,

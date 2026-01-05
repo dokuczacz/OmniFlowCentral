@@ -3,7 +3,7 @@ import logging
 
 import azure.functions as func
 
-from OmniFlowCentral.shared.blob_ops import (
+from shared.blob_ops import (
     ToolError,
     DEFAULT_MAX_BYTES_PER_FILE,
     DEFAULT_READ_MANY_FILES,
@@ -16,7 +16,7 @@ from OmniFlowCentral.shared.blob_ops import (
     read_many_blobs,
     upload_blob,
 )
-from OmniFlowCentral.shared.data_ops import (
+from shared.data_ops import (
     add_new_data,
     dataset_search,
     eli_acts_query,
@@ -25,12 +25,12 @@ from OmniFlowCentral.shared.data_ops import (
     update_data_entry,
     upload_data_or_file,
 )
-from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
-from OmniFlowCentral.shared.request_contract import parse_request
-from OmniFlowCentral.shared.tool_catalog import canonical_tool_name, apply_param_aliases
-from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
-from OmniFlowCentral.shared.user_validator import UserValidator
-from OmniFlowCentral.shared.response import json_response
+from shared.error_codes import build_error_payload, get_status_code
+from shared.request_contract import parse_request
+from shared.tool_catalog import canonical_tool_name, apply_param_aliases
+from shared.tool_specs import TOOL_SPECS
+from shared.user_validator import UserValidator
+from shared.response import json_response
 
 DEFAULT_MAX_RESULTS = 200
 DEFAULT_TIMEOUT_SECONDS = 10

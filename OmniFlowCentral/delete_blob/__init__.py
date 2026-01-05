@@ -2,11 +2,11 @@ import logging
 
 import azure.functions as func
 
-from OmniFlowCentral.shared.blob_ops import ToolError, delete_blob
-from OmniFlowCentral.shared.error_codes import build_error_payload, get_status_code
-from OmniFlowCentral.shared.request_contract import parse_request
-from OmniFlowCentral.shared.response import json_response
-from OmniFlowCentral.shared.user_validator import extract_user_id
+from shared.blob_ops import ToolError, delete_blob
+from shared.error_codes import build_error_payload, get_status_code
+from shared.request_contract import parse_request
+from shared.response import json_response
+from shared.user_validator import extract_user_id
 
 
 def _error_response(exc: ToolError) -> func.HttpResponse:

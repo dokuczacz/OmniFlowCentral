@@ -2,8 +2,8 @@ import logging
 
 import azure.functions as func
 
-from OmniFlowCentral.shared.response import json_response
-from OmniFlowCentral.shared.tool_specs import TOOL_SPECS
+from shared.response import json_response
+from shared.tool_specs import TOOL_SPECS
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:

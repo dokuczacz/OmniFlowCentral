@@ -4,7 +4,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from azure.core.exceptions import ResourceNotFoundError
 
-from OmniFlowCentral.shared.blob_ops import ToolError
+from shared.blob_ops import ToolError
 
 def _current_iso_timestamp() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + 'Z'

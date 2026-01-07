@@ -47,10 +47,24 @@ POST /api/tools/call
 #### Acts Index (JSONL - Queryable)
 **Direct file**: `datasets/eli_acts/index/acts_inforce_1.jsonl`
 - 40,000+ acts indexed as newline-delimited JSON
-- Searchable with `eli_acts_query` tool
+- **Recommended**: Use `query_dataset` with `fetch_content=true` for single-call queries
 
-**Query example**:
+**Query example (recommended - unified tool):**
+```json
+POST /api/tools/call
+{
+  "tool": "query_dataset",
+  "params": {
+    "dataset": "eli_acts",
+    "q": "finansowanie społecznościowe",
+    "limit": 10,
+    "fetch_content": true
+  }
+}
 ```
+
+**Legacy alternative:**
+```json
 POST /api/tools/call
 {
   "tool": "eli_acts_query",
@@ -60,6 +74,7 @@ POST /api/tools/call
   }
 }
 ```
+> Note: `eli_acts_query` is deprecated. Use `query_dataset` for better performance.
 
 ### 2. SAOS (Supreme Court) – Judgments Database
 
@@ -79,12 +94,13 @@ GET /api/list_blobs?prefix=datasets/saos/judgments/pages&max_results=10
 ```json
 POST /api/tools/call
 {
-  "tool": "read_blob_file",
+  "tool": "read_blob",
   "params": {
-    "file_name": "datasets/saos/judgments/pages/page_00000.json"
+    "name": "datasets/saos/judgments/pages/page_00000.json"
   }
 }
 ```
+> Note: Single files are capped at 500KB. For larger files, use chunking or query_dataset.
 
 #### Judgments Index
 **Status**: ✅ **Index ready!**
@@ -94,16 +110,32 @@ POST /api/tools/call
 - Built: 2026-01-07
 
 **Metadata**: `datasets/saos/judgments/metadata/index_summary.json`
-
-**Read index example**:
+Query index (recommended - uses query_dataset):**
 ```json
 POST /api/tools/call
 {
-  "tool": "read_blob_file",
+  "tool": "query_dataset",
   "params": {
-    "file_name": "datasets/saos/judgments/index/judgments_index.jsonl"
+    "dataset": "saos_judgments",
+    "q": "Amber Gold",
+    "court": "Gdańsk",
+    "limit": 10,
+    "fetch_content": true
   }
 }
+```
+
+**Direct read (for inspection only):**
+```json
+POST /api/tools/call
+{
+  "tool": "read_blob",
+  "params": {
+    "name": "datasets/saos/judgments/index/judgments_index.jsonl"
+  }
+}
+```
+> Warning: This file is 338MB. Direct read will be truncated at 500KB soft cap. Use query_dataset instead.
 ```
 
 #### SAOS Metadata (Legacy - Common Courts)
@@ -137,18 +169,21 @@ Files: `download_summary.json` with run info.
 ```http
 GET /api/list_blobs?prefix=datasets/eli/metadata&timeout_seconds=30
 ```
-
-### Pattern 2: Read multiple files at once
+Query datasets (recommended)
 ```json
 POST /api/tools/call
 {
-  "tool": "read_many_blobs",
+  "tool": "query_dataset",
   "params": {
-    "files": [
-      "datasets/eli/metadata/institutions.json",
-      "datasets/eli/metadata/keywords.json"
-    ],
-    "parse_json": true
+    "dataset": "eli_acts",
+    "q": "konsorcjum",
+    "year": 2020,
+    "limit": 20,
+    "fetch_content": true
+  }
+}
+```
+> Use `query_dataset` with `fetch_content=true` to get complete records in one call. "parse_json": true
   }
 }
 ```
@@ -180,11 +215,12 @@ POST /api/tools/call
 ```
 
 ---
-
-## Key Points for CustomGPT
-
-1. **Always use prefixes** with `/api/list_blobs` to avoid timeout
-2. **SAOS expansion** complete – 20K judgments indexed and ready
+Use query_dataset with fetch_content=true** – Best performance, single call for data + content
+2. **Always use prefixes** with `/api/list_blobs` to avoid timeout
+3. **SAOS expansion** complete – 20K judgments indexed and ready
+4. **ELI full coverage** – 40K+ acts already indexed and searchable
+5. **Safety limits** – read_blob: 500KB cap, read_many: 1.25MB total, chunking available
+6. **No user prefix needed** – blobs are stored directly under `datasets/`
 3. **ELI full coverage** – 40K+ acts already indexed and searchable
 4. **No user prefix needed** – blobs are stored directly under `datasets/`
 5. **Timeout settings** – use `timeout_seconds=30` for prefix queries to be safe

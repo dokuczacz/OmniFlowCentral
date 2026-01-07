@@ -5,6 +5,12 @@ info:
   description: >-
     OpenAPI schema for OmniFlow Central tools. Direct blob endpoints and unified
     /api/tools/call dispatcher for advanced operations (list_blobs, read_blob, eli_acts_query, dataset_search, etc.).
+    
+    BEST PRACTICES:
+    - Use query_dataset with fetch_content=true for dataset queries (replaces eli_acts_query)
+    - Always specify prefix when listing blobs to avoid timeouts
+    - Respect safety limits: read_blob 500KB, read_many 1.25MB total
+    - Available datasets: eli_acts (Polish legislation), saos_judgments (court decisions)
 servers:
   - url: https://omniflowcentral-bagkbfera7d0hncc.switzerlandnorth-01.azurewebsites.net
 components:
@@ -448,17 +454,13 @@ paths:
             schema:
               $ref: '#/components/schemas/ToolCallRequest'
             examples:
-              eli_acts_query:
-                value:
-                  tool: eli_acts_query
-                  q: Prawo budowlane
-                  limit: 5
               query_dataset_eli:
                 value:
                   tool: query_dataset
                   dataset: eli_acts
                   q: Prawo budowlane
                   limit: 5
+                  fetch_content: true
               query_dataset_saos:
                 value:
                   tool: query_dataset
@@ -467,6 +469,12 @@ paths:
                   court: Gdańsk
                   limit: 10
                   fetch_content: true
+              eli_acts_query_legacy:
+                summary: "Legacy (deprecated - use query_dataset instead)"
+                value:
+                  tool: eli_acts_query
+                  q: Prawo budowlane
+                  limit: 5
               dataset_search:
                 value:
                   tool: dataset_search

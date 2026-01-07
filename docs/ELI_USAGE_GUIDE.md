@@ -50,9 +50,64 @@ x-functions-key: YOUR_FUNCTION_KEY
 }
 ```
 
-### 2. Query the ELI Dataset
+### 2. Query the ELI Dataset (Recommended: query_dataset with fetch_content)
 
-**Request:**
+**Request (unified approach):**
+```http
+POST /api/tools/call
+Content-Type: application/json
+x-functions-key: YOUR_FUNCTION_KEY
+
+{
+  "tool": "query_dataset",
+  "payload": {
+    "params": {
+      "dataset": "eli_acts",
+      "q": "podatek",
+      "year": 2025,
+      "limit": 5,
+      "fetch_content": true
+    }
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "tool": "query_dataset",
+  "user_id": "default",
+  "result": {
+    "status": "success",
+    "dataset": "eli_acts",
+    "total_scanned": 59000,
+    "total_returned": 5,
+    "limit": 5,
+    "hits": [
+      {
+        "ELI": "DU/2025/1234",
+        "title": "Ustawa o podatku dochodowym...",
+        "publisher": "DU",
+        "year": 2025,
+        "pos": 1234,
+        "status": "obowiązujący",
+        "displayAddress": "Dz.U. 2025 poz. 1234",
+        "promulgation": "2025-06-15",
+        "announcementDate": "2025-06-01",
+        "changeDate": "2025-12-20T10:15:30",
+        "type": "Ustawa"
+      }
+    ],
+    "provenance": {
+      "index_path": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",
+      "source": "https://api.sejm.gov.pl/eli/acts/search"
+    }
+  }
+}
+```
+
+**Alternative (legacy eli_acts_query - still supported):**
 ```http
 POST /api/tools/call
 Content-Type: application/json
@@ -63,6 +118,43 @@ x-functions-key: YOUR_FUNCTION_KEY
   "payload": {
     "params": {
       "q": "podatek",
+      "year": 2025,
+      "limit": 5
+    }
+  }
+}
+```
+
+> **Note:** `eli_acts_query` is deprecated. Use `query_dataset` with `fetch_content=true` for better performance and fewer calls.
+
+**Legacy Response (similar to query_dataset):**
+```json
+{
+  "status": "success",
+  "tool": "eli_acts_query",
+  "user_id": "default",
+  "result": {
+    "status": "success",
+    "dataset": "eli_acts",
+    "total_scanned": 59000,
+    "total_returned": 5,
+    "limit": 5,
+    "hits": [
+      {
+        "ELI": "DU/2025/1234",
+        "title": "Ustawa o podatku dochodowym...",
+        "publisher": "DU",
+        "year": 2025,
+        "pos": 1234,
+        "status": "obowiązujący",
+        "displayAddress": "Dz.U. 2025 poz. 1234",
+        "promulgation": "2025-06-15",
+        "announcementDate": "2025-06-01",
+        "changeDate": "2025-12-20T10:15:30",
+        "type": "Ustawa"
+      }
+    ],
+    "provenance": {
       "year": 2025,
       "limit": 5
     }
@@ -227,17 +319,32 @@ python scripts/eli_dump_to_blob.py --write-index-jsonl
 In your Custom GPT instructions:
 
 ```
-When asked about Polish legislation, use these tools:
+When asked about Polish legislation, use the unified query_dataset tool:
 
+**Recommended approach (single call with content):**
+   - Tool: query_dataset
+   - Params: {
+       "dataset": "eli_acts",
+       "q": "<search_term>",
+       "year": <year>,
+       "limit": 10,
+       "fetch_content": true  // RECOMMENDED: get full records in one call
+     }
+
+**Alternative (two-step discovery then query):**
 1. First, discover datasets:
    - Tool: dataset_search
    - Params: {"user_id": "public", "tags_any": ["eli"]}
 
-2. Then query the ELI dataset:
-   - Tool: eli_acts_query
-   - Params: {"q": "<search_term>", "year": <year>, "limit": 10}
+2. Then query with content fetching:
+   - Tool: query_dataset
+   - Params: {"dataset": "eli_acts", "q": "<search>", "fetch_content": true}
+
+**Legacy (deprecated):**
+   - Tool: eli_acts_query (still supported for backward compatibility)
 
 Always cite the source using the ELI identifier and displayAddress.
+Use fetch_content=true to get complete records without additional calls.
 ```
 
 ## Citing Results

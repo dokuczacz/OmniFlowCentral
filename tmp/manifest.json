@@ -1,0 +1,20 @@
+{
+  "manifest_version": 1,
+  "updated_at": "2026-01-06T16:36:28Z",
+  "entries": [
+    {
+      "blob_name": "users/default/eli_candidates.json",
+      "display_name": "eli_candidates.json",
+      "summary": "",
+      "tags": [],
+      "category": "dataset",
+      "source": "custom_gpt_api",
+      "size": 8538,
+      "content_type": "application/json",
+      "updated_at": "2026-01-06T16:36:28Z",
+      "created_at": "2026-01-06T16:08:23Z",
+      "manifest_tags": [],
+      "metadata": {}
+    }
+  ]
+}

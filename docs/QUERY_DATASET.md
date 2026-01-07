@@ -85,6 +85,8 @@ Polish court judgments from SAOS API.
   "total_returned": 3,
   "limit": 10,
   "fetch_content": true,
+  "truncated": true,
+  "warning": "Response truncated to soft cap.",
   "hits": [
     {
       "caseNumber": "II K 38/16",
@@ -94,6 +96,7 @@ Polish court judgments from SAOS API.
       "summary": "Amber Gold - oszustwo...",
       "pageId": "page_00042",
       "recordIndex": 17,
+      "_contentTruncated": true,
       "_fullContent": {
         // Full judgment object if fetch_content=true
       }
@@ -104,6 +107,10 @@ Polish court judgments from SAOS API.
   }
 }
 ```
+
+Notes:
+- When full content exceeds the per-item soft cap, `_contentTruncated: true` is returned and `_fullContent` is omitted.
+- When the overall response exceeds the soft cap, `truncated: true` and a `warning` are included, and results may be shortened.
 
 ## Building Indexes
 

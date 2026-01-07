@@ -1,3 +1,5 @@
+import contextlib
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +11,16 @@ from azure.core.exceptions import ResourceNotFoundError
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+_APP_ROOT = _REPO_ROOT / "OmniFlowCentral"
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
+
+USE_AZURE_STORAGE = os.getenv("WP1_GOLDEN_USE_AZURE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+GOLDEN_USER = os.getenv("WP1_GOLDEN_USER", "alice")
 
 from OmniFlowCentral.shared.blob_ops import (
     delete_blob,
@@ -26,6 +38,8 @@ from OmniFlowCentral.shared.data_ops import (
     update_data_entry,
     upload_data_or_file,
 )
+from OmniFlowCentral.shared.manifest_helper import load_manifest
+
 
 class FakeBlob:
     def __init__(self, name: str, size: int):
@@ -33,12 +47,14 @@ class FakeBlob:
         self.size = size
         self.last_modified = datetime.utcnow()
 
+
 class FakeDownloader:
     def __init__(self, data: bytes):
         self._data = data
 
     def readall(self) -> bytes:
         return self._data
+
 
 class FakeBlobClient:
     def __init__(self, container: "FakeContainerClient", name: str):
@@ -54,6 +70,18 @@ class FakeBlobClient:
         if payload is None:
             raise ResourceNotFoundError("blob not found")
         return FakeDownloader(payload)
+
+    def get_blob_properties(self):
+        payload = self.container.blobs.get(self.name)
+        if payload is None:
+            raise ResourceNotFoundError("blob not found")
+
+        class _Props:
+            def __init__(self, size: int):
+                self.size = size
+
+        size = len(payload) if isinstance(payload, (bytes, bytearray)) else len(str(payload))
+        return _Props(size)
 
     def upload_blob(self, payload: bytes, overwrite: bool = False, **kwargs) -> None:
         self.container.blobs[self.name] = payload
@@ -71,6 +99,7 @@ class FakeBlobClient:
             raise ResourceNotFoundError("source missing")
         self.container.blobs[self.name] = data
 
+
 class FakeContainerClient:
     def __init__(self):
         self.blobs: Dict[str, bytes] = {}
@@ -85,41 +114,46 @@ class FakeContainerClient:
             size = len(data) if isinstance(data, bytes) else len(str(data))
             yield FakeBlob(name, size)
 
-container = FakeContainerClient()
 
-with patch(
-    "OmniFlowCentral.shared.blob_ops._get_container_client", lambda: container
-), patch(
-    "OmniFlowCentral.shared.data_ops._connect_container", lambda: container
-):
+def run_suite(container_client):
     print("== WP1 Golden suite start ==")
     print("1) upload_blob")
-    print("  ->", upload_blob("notes.json", "payload", "alice"))
+    print("  ->", upload_blob("notes.json", "payload", GOLDEN_USER))
 
     print("2) list_blobs")
-    print("  ->", list_blobs("alice"))
+    print("  ->", list_blobs(GOLDEN_USER))
 
     print("3) read_blob")
-    print("  -> size", read_blob("alice", "notes.json")["size"])
+    print("  -> size", read_blob(GOLDEN_USER, "notes.json")["size"])
 
     print("4) read_many_blobs")
-    upload_blob("draft.md", "line1\nline2\n", "alice")
-    print("  -> items", len(read_many_blobs("alice", ["notes.json", "draft.md"], tail_lines=1)["items"]))
+    upload_blob("draft.md", "line1\nline2\n", GOLDEN_USER)
+    print(
+        "  -> items",
+        len(
+            read_many_blobs(
+                GOLDEN_USER, ["notes.json", "draft.md"], tail_lines=1
+            )["items"]
+        ),
+    )
 
     print("5) get_filtered_data")
     upload_data_or_file(
-        "alice",
+        GOLDEN_USER,
         {
             "target_blob_name": "records.json",
             "file_content": [{"status": "new"}, {"status": "done"}],
             "tags": ["dataset"],
         },
     )
-    print("  -> filtered count", get_filtered_data("alice", "records.json", "status", "done")["count"])
+    print(
+        "  -> filtered count",
+        get_filtered_data(GOLDEN_USER, "records.json", "status", "done")["count"],
+    )
 
     print("6) upload_data_or_file + add_new_data")
     upload_data_or_file(
-        "alice",
+        GOLDEN_USER,
         {
             "target_blob_name": "dataset.json",
             "file_content": {"name": "first"},
@@ -128,7 +162,7 @@ with patch(
         },
     )
     add_new_data(
-        "alice",
+        GOLDEN_USER,
         {"target_blob_name": "dataset.json", "new_entry": {"name": "second", "status": "ok"}},
     )
 
@@ -136,7 +170,7 @@ with patch(
     print(
         "  -> updated value",
         update_data_entry(
-            "alice",
+            GOLDEN_USER,
             {
                 "target_blob_name": "dataset.json",
                 "find_key": "name",
@@ -149,8 +183,9 @@ with patch(
 
     print("8) remove_data_entry")
     print(
-        "  ->", remove_data_entry(
-            "alice",
+        "  ->",
+        remove_data_entry(
+            GOLDEN_USER,
             {
                 "target_blob_name": "dataset.json",
                 "find_key": "name",
@@ -158,27 +193,50 @@ with patch(
                 "update_key": "status",
                 "update_value": "removed",
             },
-        )["manifest_status"]
+        )["manifest_status"],
     )
 
     print("9) manage_files list/rename/delete")
-    print("  -> list", manage_files("alice", {"operation": "list", "prefix": ""})["files"])
+    print("  -> list", manage_files(GOLDEN_USER, {"operation": "list", "prefix": ""})["files"])
     manage_files(
-        "alice",
+        GOLDEN_USER,
         {
             "operation": "rename",
             "source_name": "dataset.json",
             "target_name": "dataset-renamed.json",
         },
     )
-    manage_files("alice", {"operation": "delete", "source_name": "dataset-renamed.json"})
+    manage_files(GOLDEN_USER, {"operation": "delete", "source_name": "dataset-renamed.json"})
 
     print("10) dataset_search")
-    search = dataset_search("alice", {"tags_any": ["search"], "limit": 5})
+    search = dataset_search(GOLDEN_USER, {"tags_any": ["search"], "limit": 5})
     print("  -> hits", len(search["hits"]), "total", search["total"])
 
-    from OmniFlowCentral.shared.manifest_helper import load_manifest
-
-    manifest_entries = load_manifest(container, "alice")["entries"]
+    manifest_entries = load_manifest(container_client, GOLDEN_USER)["entries"]
     print("11) manifest entries", [entry["blob_name"] for entry in manifest_entries])
     print("== WP1 Golden suite end ==")
+
+
+def run():
+    if USE_AZURE_STORAGE:
+        from OmniFlowCentral.shared.blob_ops import _get_container_client
+
+        container_client = _get_container_client()
+        print("Running WP1 Golden suite against Azure storage (user=%s)" % GOLDEN_USER)
+        run_suite(container_client)
+        return
+
+    fake_container = FakeContainerClient()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(
+            patch("OmniFlowCentral.shared.blob_ops._get_container_client", lambda: fake_container)
+        )
+        stack.enter_context(
+            patch("OmniFlowCentral.shared.data_ops._connect_container", lambda: fake_container)
+        )
+        print("Running WP1 Golden suite against in-memory fake container (user=%s)" % GOLDEN_USER)
+        run_suite(fake_container)
+
+
+if __name__ == "__main__":
+    run()

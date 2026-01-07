@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
-from shared.blob_ops import ToolError
+from shared.blob_ops import ToolError, RESPONSE_SOFT_CAP
 from shared.config import AzureConfig
 from shared.manifest_helper import (
     build_manifest_entry,
@@ -589,6 +589,46 @@ DATASET_INDEX_REGISTRY = {
     "saos_judgments": "datasets/saos/judgments/index/judgments_index.jsonl",
 }
 
+QUERY_DATASET_CONTENT_SOFT_CAP = 200 * 1024
+
+
+def _estimate_json_bytes(value: Any) -> int:
+    try:
+        return len(
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        )
+    except Exception:
+        return 0
+
+
+def _apply_response_soft_cap(response: Dict[str, Any]) -> Dict[str, Any]:
+    if not RESPONSE_SOFT_CAP:
+        return response
+    if _estimate_json_bytes(response) <= RESPONSE_SOFT_CAP:
+        return response
+
+    response["truncated"] = True
+    response["warning"] = "Response truncated to soft cap."
+    hits = response.get("hits", [])
+
+    # First, drop full content payloads to stay under the cap.
+    for hit in reversed(hits):
+        if "_fullContent" in hit:
+            hit.pop("_fullContent", None)
+            hit["_contentTruncated"] = True
+        if _estimate_json_bytes(response) <= RESPONSE_SOFT_CAP:
+            response["total_returned"] = len(hits)
+            return response
+
+    # If still too large, drop hits from the end.
+    while hits and _estimate_json_bytes(response) > RESPONSE_SOFT_CAP:
+        hits.pop()
+    response["hits"] = hits
+    response["total_returned"] = len(hits)
+    return response
+
 
 def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -687,7 +727,7 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
             "index_path": index_path,
         },
     }
-    return response
+    return _apply_response_soft_cap(response)
 
 
 def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
@@ -726,22 +766,29 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
 def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
     """Check if record matches text search query."""
     if dataset_name == "eli_acts":
-        title = record.get("title", "").lower()
+        title = str(record.get("title") or "").lower()
         return query in title
     
     elif dataset_name == "saos_judgments":
         # Search in summary, caseNumber, and court name
-        searchable = " ".join([
-            record.get("summary", ""),
-            record.get("caseNumber", ""),
-            record.get("court", ""),
-        ]).lower()
+        searchable = " ".join(
+            [
+                str(record.get("summary") or ""),
+                str(record.get("caseNumber") or ""),
+                str(record.get("court") or ""),
+            ]
+        ).lower()
         return query in searchable
     
     return False
 
 
-def _attach_full_content(results: List[Dict], container_client, dataset_name: str) -> List[Dict]:
+def _attach_full_content(
+    results: List[Dict],
+    container_client,
+    dataset_name: str,
+    max_content_bytes: int = QUERY_DATASET_CONTENT_SOFT_CAP,
+) -> List[Dict]:
     """Fetch and attach full blob content for each matched record."""
     enriched = []
     
@@ -762,7 +809,12 @@ def _attach_full_content(results: List[Dict], container_client, dataset_name: st
                 page_data = json.loads(raw_data.decode("utf-8"))
                 
                 if isinstance(page_data, list) and record_index < len(page_data):
-                    record["_fullContent"] = page_data[record_index]
+                    candidate = page_data[record_index]
+                    content_size = _estimate_json_bytes(candidate)
+                    if max_content_bytes and content_size > max_content_bytes:
+                        record["_contentTruncated"] = True
+                    else:
+                        record["_fullContent"] = candidate
             except Exception as e:
                 logging.warning(f"Could not fetch content for {blob_path}: {e}")
                 record["_contentError"] = str(e)

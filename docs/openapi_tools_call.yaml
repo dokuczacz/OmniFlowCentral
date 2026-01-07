@@ -508,6 +508,31 @@ paths:
                           year: 1994
                           status: active
                           publisher: Sejm RP
+                query_dataset_truncated:
+                  value:
+                    status: success
+                    tool: query_dataset
+                    user_id: default
+                    result:
+                      status: success
+                      dataset: saos_judgments
+                      total_scanned: 20000
+                      total_returned: 2
+                      limit: 10
+                      fetch_content: true
+                      truncated: true
+                      warning: Response truncated to soft cap.
+                      hits:
+                        - caseNumber: II K 38/16
+                          court: Sad Okregowy w Gdansku
+                          courtType: COMMON
+                          judgmentDate: '2017-05-15'
+                          summary: Amber Gold - oszustwo...
+                          pageId: page_00042
+                          recordIndex: 17
+                          _contentTruncated: true
+                      provenance:
+                        index_path: datasets/saos/judgments/index/judgments_index.jsonl
                 list_blobs:
                   value:
                     status: success

@@ -583,47 +583,69 @@ def dataset_search(user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     return response
 
 
-def eli_acts_query(params: Dict[str, Any]) -> Dict[str, Any]:
+# Dataset index registry: maps dataset names to index blob paths
+DATASET_INDEX_REGISTRY = {
+    "eli_acts": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",
+    "saos_judgments": "datasets/saos/judgments/index/judgments_index.jsonl",
+}
+
+
+def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Query the public ELI acts dataset stored in users/public/datasets/eli_acts/index/acts_inforce_1.jsonl.
+    Unified dataset query tool. Searches NDJSON indexes with optional content fetching.
     
-    Supports filters: q (title search), year, publisher, status, limit.
-    Returns matching ActInfo records with ELI, title, status, dates, etc.
+    Supports:
+    - dataset: name of the dataset (eli_acts, saos_judgments, etc.)
+    - q: text search query
+    - limit: max results (default 10, max 100)
+    - fetch_content: bool - if True, fetches full blob content for each match
+    - Dataset-specific filters (year, publisher, status, court, etc.)
+    
+    Returns matching records with optional full content attached.
     """
+    dataset_name = str(params.get("dataset") or "").strip()
+    if not dataset_name:
+        raise ToolError("MISSING_PARAM", "Parameter 'dataset' is required.")
+    
+    index_path = DATASET_INDEX_REGISTRY.get(dataset_name)
+    if not index_path:
+        raise ToolError(
+            "INVALID_PARAM",
+            f"Unknown dataset '{dataset_name}'. Available: {list(DATASET_INDEX_REGISTRY.keys())}",
+        )
+    
     q = str(params.get("q") or "").strip().lower()
-    year = params.get("year")
-    publisher = str(params.get("publisher") or "").strip().upper()
-    status = str(params.get("status") or "").strip().lower()
     limit = params.get("limit")
     try:
         limit = int(limit)
     except (TypeError, ValueError):
         limit = 10
-    limit = max(1, min(limit, 50))
+    limit = max(1, min(limit, 100))
     
-    # Read the JSONL index from public namespace
+    fetch_content = bool(params.get("fetch_content", False))
+    
+    # Read the NDJSON index
     container_client = _connect_container()
-    index_blob_name = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
     
     try:
-        blob_client = container_client.get_blob_client(index_blob_name)
+        blob_client = container_client.get_blob_client(index_path)
         raw_data = blob_client.download_blob().readall()
         lines = raw_data.decode("utf-8").strip().split("\n")
     except ResourceNotFoundError:
         raise ToolError(
             "NOT_FOUND",
-            f"ELI acts index not found at {index_blob_name}. Please run eli_dump_to_blob.py first.",
+            f"Dataset index not found at {index_path}. Please build the index first.",
         )
     except AzureError as exc:
-        logging.exception("eli_acts_query: failed to read index")
+        logging.exception(f"query_dataset: failed to read index for {dataset_name}")
         raise ToolError(
             "UPSTREAM_ERROR",
-            "Unable to read ELI acts index.",
+            f"Unable to read dataset index for {dataset_name}.",
             {"detail": str(exc)},
             status=502,
         )
     
-    # Filter and collect results
+    # Apply dataset-specific filtering
     results: List[Dict[str, Any]] = []
     total_scanned = 0
     
@@ -632,58 +654,140 @@ def eli_acts_query(params: Dict[str, Any]) -> Dict[str, Any]:
             continue
         total_scanned += 1
         try:
-            act = json.loads(line)
+            record = json.loads(line)
         except json.JSONDecodeError:
             continue
-            
-        # Apply filters
-        if year is not None:
-            try:
-                if act.get("year") != int(year):
-                    continue
-            except (TypeError, ValueError):
-                continue
-                
-        if publisher and act.get("publisher", "").upper() != publisher:
-            continue
-            
-        if status and act.get("status", "").lower() != status:
-            continue
-            
-        if q:
-            title = act.get("title", "").lower()
-            if q not in title:
-                continue
         
-        # Build result entry
-        hit = {
-            "ELI": act.get("ELI"),
-            "title": act.get("title"),
-            "publisher": act.get("publisher"),
-            "year": act.get("year"),
-            "pos": act.get("pos"),
-            "status": act.get("status"),
-            "displayAddress": act.get("displayAddress"),
-            "promulgation": act.get("promulgation"),
-            "announcementDate": act.get("announcementDate"),
-            "changeDate": act.get("changeDate"),
-            "type": act.get("type"),
-        }
-        results.append(hit)
+        # Apply filters based on dataset type
+        if not _matches_filters(record, params, dataset_name):
+            continue
+        
+        # Text search across relevant fields
+        if q and not _text_search_match(record, q, dataset_name):
+            continue
+        
+        results.append(record)
         
         if len(results) >= limit:
             break
     
+    # Optionally fetch full content for matched records
+    if fetch_content:
+        results = _attach_full_content(results, container_client, dataset_name)
+    
     response = {
         "status": "success",
-        "dataset": "eli_acts",
+        "dataset": dataset_name,
         "total_scanned": total_scanned,
         "total_returned": len(results),
         "limit": limit,
         "hits": results,
+        "fetch_content": fetch_content,
         "provenance": {
-            "blob_path": index_blob_name,
-            "source": "https://api.sejm.gov.pl/eli/acts/search",
+            "index_path": index_path,
         },
     }
     return response
+
+
+def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
+    """Apply dataset-specific filters."""
+    if dataset_name == "eli_acts":
+        # ELI-specific filters
+        year = params.get("year")
+        if year is not None:
+            try:
+                if record.get("year") != int(year):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        
+        publisher = str(params.get("publisher") or "").strip().upper()
+        if publisher and record.get("publisher", "").upper() != publisher:
+            return False
+        
+        status = str(params.get("status") or "").strip().lower()
+        if status and record.get("status", "").lower() != status:
+            return False
+    
+    elif dataset_name == "saos_judgments":
+        # SAOS-specific filters
+        court = str(params.get("court") or "").strip().lower()
+        if court and court not in record.get("court", "").lower():
+            return False
+        
+        court_type = str(params.get("court_type") or "").strip().lower()
+        if court_type and court_type != record.get("courtType", "").lower():
+            return False
+    
+    return True
+
+
+def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
+    """Check if record matches text search query."""
+    if dataset_name == "eli_acts":
+        title = record.get("title", "").lower()
+        return query in title
+    
+    elif dataset_name == "saos_judgments":
+        # Search in summary, caseNumber, and court name
+        searchable = " ".join([
+            record.get("summary", ""),
+            record.get("caseNumber", ""),
+            record.get("court", ""),
+        ]).lower()
+        return query in searchable
+    
+    return False
+
+
+def _attach_full_content(results: List[Dict], container_client, dataset_name: str) -> List[Dict]:
+    """Fetch and attach full blob content for each matched record."""
+    enriched = []
+    
+    for record in results:
+        # Determine blob path based on dataset structure
+        if dataset_name == "saos_judgments":
+            page_id = record.get("pageId", "")
+            if not page_id:
+                enriched.append(record)
+                continue
+            
+            blob_path = f"datasets/saos/judgments/pages/{page_id}.json"
+            record_index = record.get("recordIndex", 0)
+            
+            try:
+                blob_client = container_client.get_blob_client(blob_path)
+                raw_data = blob_client.download_blob().readall()
+                page_data = json.loads(raw_data.decode("utf-8"))
+                
+                if isinstance(page_data, list) and record_index < len(page_data):
+                    record["_fullContent"] = page_data[record_index]
+            except Exception as e:
+                logging.warning(f"Could not fetch content for {blob_path}: {e}")
+                record["_contentError"] = str(e)
+        
+        enriched.append(record)
+    
+    return enriched
+
+
+def eli_acts_query(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Query the public ELI acts dataset stored in users/public/datasets/eli_acts/index/acts_inforce_1.jsonl.
+    
+    **DEPRECATED**: Use query_dataset with dataset="eli_acts" instead.
+    This function is kept for backward compatibility.
+    
+    Supports filters: q (title search), year, publisher, status, limit.
+    Returns matching ActInfo records with ELI, title, status, dates, etc.
+    """
+    # Delegate to unified query_dataset
+    params_copy = dict(params)
+    params_copy["dataset"] = "eli_acts"
+    result = query_dataset(params_copy)
+    
+    # Maintain old response format for compatibility
+    result["provenance"]["source"] = "https://api.sejm.gov.pl/eli/acts/search"
+    return result
+

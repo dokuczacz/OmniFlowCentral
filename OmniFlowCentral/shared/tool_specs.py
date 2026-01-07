@@ -124,7 +124,7 @@ TOOL_SPECS = {
         },
     },
     "eli_acts_query": {
-        "description": "Query the Sejm ELI acts dataset (public dataset of Polish legislative acts).",
+        "description": "Query the Sejm ELI acts dataset (public dataset of Polish legislative acts). DEPRECATED: use query_dataset instead.",
         "method": "POST",
         "params": {
             "q": "optional string (search in title)",
@@ -132,6 +132,21 @@ TOOL_SPECS = {
             "publisher": "optional string (filter by publisher)",
             "status": "optional string (filter by status)",
             "limit": "optional int (default 10, max 50)",
+        },
+    },
+    "query_dataset": {
+        "description": "Unified dataset query tool. Search NDJSON indexes with optional full content fetching. Supports eli_acts, saos_judgments, and future datasets.",
+        "method": "POST",
+        "params": {
+            "dataset": "string (dataset name: eli_acts, saos_judgments, etc.)",
+            "q": "optional string (text search query)",
+            "limit": "optional int (default 10, max 100)",
+            "fetch_content": "optional bool (default false - if true, fetch full blob content for matches)",
+            "year": "optional int (ELI: filter by year)",
+            "publisher": "optional string (ELI: filter by publisher)",
+            "status": "optional string (ELI: filter by status)",
+            "court": "optional string (SAOS: filter by court name)",
+            "court_type": "optional string (SAOS: filter by court type)",
         },
     },
 }

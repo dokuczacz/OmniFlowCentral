@@ -21,6 +21,7 @@ from shared.data_ops import (
     add_new_data,
     dataset_search,
     eli_acts_query,
+    query_dataset,
     manage_files,
     remove_data_entry,
     update_data_entry,
@@ -171,6 +172,10 @@ def _handle_eli_acts_query(params, user_id):
     return eli_acts_query(params=params or {})
 
 
+def _handle_query_dataset(params, user_id):
+    return query_dataset(params=params or {})
+
+
 TOOL_HANDLERS = {
     "list_blobs": _handle_list_blobs,
     "upload_blob": _handle_upload,
@@ -185,6 +190,7 @@ TOOL_HANDLERS = {
     "manage_files": _handle_manage_files,
     "dataset_search": _handle_dataset_search,
     "eli_acts_query": _handle_eli_acts_query,
+    "query_dataset": _handle_query_dataset,
 }
 
 

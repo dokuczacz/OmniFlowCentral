@@ -18,6 +18,22 @@ _AZURITE_DEFAULT_CONNECTION_STRING = (
 )
 
 
+def _is_valid_connection_string(raw: str) -> bool:
+    """Basic validation to avoid preferring malformed storage settings."""
+
+    value = str(raw or "").strip()
+    if not value:
+        return False
+    if value.lower() == "usedevelopmentstorage=true":
+        return True
+
+    has_account = "AccountName=" in value
+    has_auth = ("AccountKey=" in value) or ("SharedAccessSignature=" in value)
+    has_suffix = "EndpointSuffix=" in value or "BlobEndpoint=" in value
+
+    return has_account and (has_auth or has_suffix)
+
+
 def resolve_storage_connection_string(raw: str) -> str:
     """Normalize Azure storage connection string for local dev.
 
@@ -33,11 +49,20 @@ def resolve_storage_connection_string(raw: str) -> str:
 class AzureConfig:
     """Centralized Azure configuration"""
 
-    CONNECTION_STRING = resolve_storage_connection_string(
-        os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
-        or os.environ.get("AzureWebJobsStorage")
-        or ""
-    )
+    _RAW_ENV_CONNECTION = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+    _RAW_JOBS_CONNECTION = os.environ.get("AzureWebJobsStorage", "")
+
+    _chosen_connection = None
+    if _is_valid_connection_string(_RAW_ENV_CONNECTION):
+        _chosen_connection = _RAW_ENV_CONNECTION
+    elif _is_valid_connection_string(_RAW_JOBS_CONNECTION):
+        _chosen_connection = _RAW_JOBS_CONNECTION
+    else:
+        # Fall back to whichever is present, allowing resolve_storage_connection_string
+        # to map UseDevelopmentStorage for local dev.
+        _chosen_connection = _RAW_ENV_CONNECTION or _RAW_JOBS_CONNECTION
+
+    CONNECTION_STRING = resolve_storage_connection_string(_chosen_connection)
 
     CONTAINER_NAME = os.environ.get(
         "AZURE_BLOB_CONTAINER_NAME",

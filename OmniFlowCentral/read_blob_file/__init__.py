@@ -1,4 +1,5 @@
 import logging
+import os
 
 import azure.functions as func
 
@@ -19,7 +20,11 @@ def _resolve_user_id(req: func.HttpRequest, payload: dict) -> str:
             user_id = candidate
             detected = True
     if not detected:
-        user_id = "default"
+        env_default = os.environ.get("OMNIFLOW_DEFAULT_USER_ID", "").strip()
+        if env_default and UserValidator.validate_user_id(env_default):
+            user_id = env_default
+        else:
+            user_id = "default"
     return user_id
 
 

@@ -47,3 +47,19 @@ Copy-Item OmniFlowCentral/local.settings.template.json OmniFlowCentral/local.set
 ```
 
 Then fill required `GMAIL_OAUTH_*` and storage settings for local runs.
+
+## Default user override
+
+- Set environment variable `OMNIFLOW_DEFAULT_USER_ID` to force a default user_id used by handlers
+	when no header/query/body user is provided. Example (PowerShell):
+	- `$env:OMNIFLOW_DEFAULT_USER_ID = "default"`
+	- This affects endpoints like `/api/tools/call` and `/api/read_blob_file`.
+
+## Public → default migration
+
+- A helper script copies blobs from `users/public/` to `users/default/`:
+	- Dry run: `python scripts/migrate_public_to_default.py`
+	- Execute: `python scripts/migrate_public_to_default.py --apply`
+	- Include datasets: add `--include-datasets`
+	- Delete sources after copy: add `--delete-source`
+	- Overwrite existing targets: add `--overwrite`

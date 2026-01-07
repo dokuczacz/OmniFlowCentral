@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import azure.functions as func
 
@@ -72,7 +73,11 @@ def _resolve_user_id(req, payload):
             user_id = candidate
             detected = True
     if not detected:
-        user_id = "default"
+        env_default = os.environ.get("OMNIFLOW_DEFAULT_USER_ID", "").strip()
+        if env_default and UserValidator.validate_user_id(env_default):
+            user_id = env_default
+        else:
+            user_id = "default"
     return user_id
 
 
@@ -190,6 +195,9 @@ def _normalize_tool_and_params(contract: dict) -> tuple[str, dict]:
     params = contract.get("payload", {}).get("params")
     if not isinstance(params, dict):
         params = contract.get("payload", {})
+    
+    # Filter out reserved fields that should not be passed to handlers
+    params = {k: v for k, v in params.items() if k not in ("tool", "user_id", "trace_id")}
     params = apply_param_aliases(canonical, params)
     return canonical, params
 

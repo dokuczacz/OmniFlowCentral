@@ -55,8 +55,9 @@ Public datasets:
 
 ## OpenAPI (for Custom GPT Actions)
 
-- Single-door spec: `docs/actions_openapi_app2.json`
-- Use the raw GitHub URL to that file when importing into GPT Builder (server URL must point to the deployed App2 Function App).
+- Final working spec: [docs/actions_openai_combined_read.yaml](docs/actions_openai_combined_read.yaml)
+- Minimal (capabilities only): [docs/actions_openai_WORKING.json](docs/actions_openai_WORKING.json)
+- Use the raw GitHub URL to the file when importing into GPT Builder (server URL must point to the deployed Function App).
 
 ## Data import (ELI / Sejm)
 

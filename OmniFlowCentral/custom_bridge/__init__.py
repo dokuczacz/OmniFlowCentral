@@ -20,6 +20,7 @@ from azure.storage.blob import BlobServiceClient
 from shared.config import AzureConfig
 from shared.gmail_client import GmailClient
 from shared.gmail_oauth import GmailOAuthConfig, GmailTokenStore
+from shared.tool_specs import TOOL_SPECS
 
 
 def _parse_json(req: func.HttpRequest) -> Dict[str, Any]:
@@ -396,6 +397,21 @@ ACTION_HANDLERS = {
     "gmail_list": handle_gmail_list,
     "gmail_get": handle_gmail_get,
     "gmail_attachment": handle_gmail_attachment,
+    # Tools capabilities passthrough: allow GPT to discover tools via the bridge
+    "tools_capabilities": lambda user_id, payload, token: {
+        "action": "tools_capabilities",
+        "status": "ok",
+        "user_id": user_id,
+        "capabilities": [
+            {
+                "name": name,
+                "description": spec.get("description", ""),
+                "method": spec.get("method", "POST"),
+                "params": spec.get("params", {}),
+            }
+            for name, spec in TOOL_SPECS.items()
+        ],
+    },
 }
 
 

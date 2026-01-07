@@ -44,6 +44,12 @@ OmniFlowCentral/OmniFlowCentral/.funcignore
 logs/
 *.log
 
+# Sensitive outputs (function keys) - do not commit
+docs/omniflow_function_keys_raw.json
+docs/omniflow_function_keys_unredacted.json
+docs/omniflow_test_responses_raw.json
+docs/omniflow_test_requests_raw.json
+
 # IDE
 .vscode/
 .idea/

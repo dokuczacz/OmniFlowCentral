@@ -10,6 +10,12 @@ _repo_root = str(Path(__file__).resolve().parents[2])
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
+# Azure Functions code uses app-root imports like `import shared.*` which require
+# `OmniFlowCentral/` on sys.path (Functions worker does this, pytest does not).
+_app_root = str(Path(__file__).resolve().parents[2] / "OmniFlowCentral")
+if _app_root not in sys.path:
+    sys.path.insert(0, _app_root)
+
 
 class FakeReq:
     def __init__(self, params=None, json_body=None, headers=None):

@@ -173,7 +173,43 @@ def _handle_eli_acts_query(params, user_id):
 
 
 def _handle_query_dataset(params, user_id):
-    return query_dataset(params=params or {})
+    params = params or {}
+    if not isinstance(params, dict):
+        raise ToolError("VALIDATION_FAILED", "Expected object params for query_dataset.")
+
+    params_copy = dict(params)
+    accepted_params = sorted((TOOL_SPECS.get("query_dataset") or {}).get("params", {}).keys())
+
+    warnings = []
+    nested_filters = params_copy.get("filters")
+    if nested_filters is not None:
+        if not isinstance(nested_filters, dict):
+            raise ToolError(
+                "VALIDATION_FAILED",
+                "Parameter 'filters' must be an object when provided.",
+                {"accepted_params": accepted_params, "received_type": type(nested_filters).__name__},
+            )
+        for key, value in nested_filters.items():
+            params_copy.setdefault(key, value)
+        params_copy.pop("filters", None)
+        warnings.append("Merged legacy nested 'filters' into top-level params (deprecated).")
+
+    result = query_dataset(params=params_copy)
+
+    if accepted_params:
+        unknown_params = sorted([key for key in params_copy.keys() if key not in accepted_params])
+        if unknown_params:
+            warnings.append("Ignored unrecognized params; see 'accepted_params'.")
+            result["unknown_params"] = unknown_params
+            result["accepted_params"] = accepted_params
+
+    if warnings:
+        existing = result.get("warnings")
+        if isinstance(existing, list):
+            existing.extend(warnings)
+        else:
+            result["warnings"] = warnings
+    return result
 
 
 TOOL_HANDLERS = {

@@ -8,9 +8,7 @@ This guide describes the **single canonical workflow** that Custom GPT agents sh
 3. `docs/DATASET_MANIFEST_GUIDE.md` — Explains the manifest structure that powers dataset search and how to reason about freshness / tags / categories.
 4. `docs/DATASET_DISCOVERY.md` — Describes the available datasets (ELI acts, SAOS judgments) and the prefixes you would target when you need to narrow a query manually.
 
-Optional references:
-- `docs/ELI_USAGE_GUIDE.md` — dataset-specific guidance for legislation (year, publisher, citation conventions).
-- `docs/IMPLEMENTATION_QUERY_DATASET.md` — internal notes and backward compatibility context.
+
 
 ## What the Custom GPT system instructions should say
 
@@ -32,13 +30,12 @@ Primary datasets:
     "dataset": "<eli_acts | saos_judgments>",
     "q": "<search text>",
     "limit": 10,
-    "fetch_content": true,
-    "filters": {}
+    "fetch_content": true
   }
 }
 ```
 
-Set `fetch_content=true` when you want the full act or judgment. Apply dataset-specific filters (court, year, publisher, status, tags, court_type) before raising the limit. The API automatically enforces soft caps and returns `warning`/`truncated` metadata plus `_contentTruncated` flags when payloads are trimmed.
+Set `fetch_content=true` when you want the full act or judgment. Filters must be passed as top-level keys inside `params` (e.g., `court_type`, `year`) — do not send a nested `filters={...}` object. The API automatically enforces soft caps and returns `warning`/`truncated` metadata plus `_contentTruncated` flags when payloads are trimmed.
 
 ### Use `dataset_search` for manifest discovery
 ```

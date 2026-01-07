@@ -241,3 +241,27 @@ def test_tools_call_dataset_search(fake_req):
         kwargs = mock_search.call_args.kwargs
         assert kwargs["user_id"] == "alice"
         assert kwargs["params"]["q"] == "notes"
+
+
+def test_tools_call_query_dataset_merges_nested_filters(fake_req):
+    expected = {"status": "success", "hits": []}
+    with patch("OmniFlowCentral.tools_call.query_dataset", return_value=expected) as mock_query:
+        req = fake_req(
+            json_body={
+                "tool": "query_dataset",
+                "params": {
+                    "dataset": "saos_judgments",
+                    "q": "Amber Gold",
+                    "filters": {"court_type": "common"},
+                },
+            }
+        )
+        resp = tools_call.main(req)
+        assert resp.status_code == 200
+        body = json.loads(resp.get_body().decode("utf-8"))
+        assert body["result"] == expected
+        mock_query.assert_called_once()
+        call_kwargs = mock_query.call_args.kwargs
+        assert call_kwargs["params"]["dataset"] == "saos_judgments"
+        assert call_kwargs["params"]["court_type"] == "common"
+        assert "filters" not in call_kwargs["params"]

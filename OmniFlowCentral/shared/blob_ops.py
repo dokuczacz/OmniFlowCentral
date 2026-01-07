@@ -32,6 +32,14 @@ DEFAULT_TAIL_BYTES = 65536
 DEFAULT_TAIL_LINES = 0
 DEFAULT_MAX_BYTES_PER_FILE = 262144
 
+# Safety limits (soft caps) aligned with legal-analytics UX requirements
+READ_BLOB_SOFT_CAP = 500 * 1024  # 500 KB
+READ_MANY_MAX_TOTAL_BYTES = 1250 * 1024  # ~1.25 MB
+READ_MANY_MAX_BYTES_PER_FILE = 250 * 1024  # 250 KB
+GET_FILTERED_CHUNK_SIZE = 50_000  # 50 KB chunks
+GET_FILTERED_MAX_CHUNKS = 5  # up to 250 KB processed
+RESPONSE_SOFT_CAP = 2 * 1024 * 1024  # 2 MB
+
 
 def _get_container_client() -> ContainerClient:
     if not AzureConfig.CONNECTION_STRING:
@@ -140,17 +148,31 @@ def _download_blob(
     user_id: str,
     requested_name: Optional[str] = None,
     resolved: bool = False,
+    soft_cap: int = READ_BLOB_SOFT_CAP,
 ) -> Dict[str, object]:
     blob_client = container.get_blob_client(blob_name)
-    data = blob_client.download_blob().readall()
+    props = blob_client.get_blob_properties()
+    size = int(getattr(props, "size", 0) or 0)
+    truncated = False
+
+    # Soft-cap download to avoid ResponseTooLargeError; return warning when truncated
+    if soft_cap > 0 and size > soft_cap:
+        data = blob_client.download_blob(offset=0, length=soft_cap).readall()
+        truncated = True
+    else:
+        data = blob_client.download_blob().readall()
+
     text = data.decode("utf-8", errors="replace")
-    try:
-        parsed = json.loads(text)
-        content_type = "json"
-        payload = parsed
-    except json.JSONDecodeError:
-        content_type = "text"
-        payload = text
+    content_type = "text"
+    payload: object = text
+    if not truncated:
+        try:
+            parsed = json.loads(text)
+            content_type = "json"
+            payload = parsed
+        except json.JSONDecodeError:
+            pass
+
     return {
         "file_name": _strip_user_prefix(blob_name, user_id),
         "requested_file_name": requested_name,
@@ -158,6 +180,9 @@ def _download_blob(
         "data": payload,
         "content_type": content_type,
         "size": len(data),
+        "truncated": truncated,
+        "soft_cap": soft_cap if soft_cap > 0 else None,
+        "warning": "Truncated at soft cap" if truncated else None,
     }
 
 
@@ -292,43 +317,138 @@ def get_filtered_data(
     blob_name: str,
     filter_key: Optional[str] = None,
     filter_value: Optional[str] = None,
+    *,
+    chunk_size: int = GET_FILTERED_CHUNK_SIZE,
+    max_chunks: int = GET_FILTERED_MAX_CHUNKS,
+    next_chunk_token: Optional[str] = None,
 ) -> Dict[str, object]:
+    """
+    Streaming-friendly filter for JSON/NDJSON blobs.
+
+    - For NDJSON: reads chunk_size bytes starting at offset (next_chunk_token), processes full lines, returns next token.
+    - For JSON arrays/objects: if blob size <= chunk_size*max_chunks, load once; otherwise raise guidance to use query_dataset or per-record blobs.
+    """
     sanitized = (blob_name or "").strip()
     if not sanitized:
         raise ToolError("MISSING_PARAM", "Missing blob name.")
+
+    chunk_size = max(1, chunk_size or GET_FILTERED_CHUNK_SIZE)
+    max_chunks = max(1, max_chunks or GET_FILTERED_MAX_CHUNKS)
+    offset = int(next_chunk_token or 0)
+
     container = _get_container_client()
     blob_client = container.get_blob_client(_apply_user_prefix(sanitized, user_id))
+
     try:
-        raw = blob_client.download_blob().readall().decode("utf-8")
-        parsed = json.loads(raw)
+        props = blob_client.get_blob_properties()
+        blob_size = int(getattr(props, "size", 0) or 0)
     except ResourceNotFoundError as exc:
         raise ToolError("MISSING_PARAM", f"File '{sanitized}' not found.", status=404) from exc
-    except json.JSONDecodeError as exc:
-        raise ToolError("UPSTREAM_ERROR", "Invalid JSON format.", {"detail": str(exc)}, status=500) from exc
     except AzureError as exc:
-        logging.exception("Error reading blob for filtering")
+        logging.exception("Error reading blob for filtering (props)")
         raise ToolError("UPSTREAM_ERROR", "Unable to read blob.", {"detail": str(exc)}, status=502) from exc
 
-    normalized = _normalize_entries(parsed)
-    total = len(normalized) if isinstance(normalized, list) else 1
-    filtered = normalized
-    if filter_key and filter_value is not None and isinstance(normalized, list):
-        filtered = [
-            entry
-            for entry in normalized
-            if isinstance(entry, dict) and str(entry.get(filter_key)) == str(filter_value)
-        ]
+    # If blob is small enough, load whole JSON once
+    if blob_size <= chunk_size * max_chunks:
+        try:
+            raw = blob_client.download_blob().readall().decode("utf-8")
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ToolError("UPSTREAM_ERROR", "Invalid JSON format.", {"detail": str(exc)}, status=500) from exc
+        except AzureError as exc:
+            logging.exception("Error reading blob for filtering")
+            raise ToolError("UPSTREAM_ERROR", "Unable to read blob.", {"detail": str(exc)}, status=502) from exc
 
-    response = {
+        normalized = _normalize_entries(parsed)
+        total = len(normalized) if isinstance(normalized, list) else 1
+        filtered = normalized
+        if filter_key and filter_value is not None and isinstance(normalized, list):
+            filtered = [
+                entry
+                for entry in normalized
+                if isinstance(entry, dict) and str(entry.get(filter_key)) == str(filter_value)
+            ]
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "file": sanitized,
+            "filter": {"key": filter_key, "value": filter_value} if filter_key and filter_value is not None else None,
+            "data": filtered,
+            "count": len(filtered) if isinstance(filtered, list) else 1,
+            "total": total,
+            "chunk_index": 0,
+            "is_last_chunk": True,
+            "next_chunk_token": None,
+        }
+
+    # Large blob: process as NDJSON in chunks
+    if offset >= blob_size:
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "file": sanitized,
+            "filter": {"key": filter_key, "value": filter_value} if filter_key and filter_value is not None else None,
+            "data": [],
+            "count": 0,
+            "total": None,
+            "chunk_index": offset // chunk_size,
+            "is_last_chunk": True,
+            "next_chunk_token": None,
+        }
+
+    try:
+        raw = blob_client.download_blob(offset=offset, length=chunk_size).readall().decode("utf-8", errors="replace")
+    except AzureError as exc:
+        logging.exception("Error reading blob chunk for filtering")
+        raise ToolError("UPSTREAM_ERROR", "Unable to read blob chunk.", {"detail": str(exc)}, status=502) from exc
+
+    # Use newline boundary to avoid splitting NDJSON lines mid-record
+    if "\n" in raw:
+        cut = raw.rfind("\n")
+        if cut != -1:
+            chunk_text = raw[: cut + 1]
+            remainder_len = len(raw) - (cut + 1)
+        else:
+            chunk_text = raw
+            remainder_len = 0
+    else:
+        chunk_text = raw
+        remainder_len = 0
+
+    lines = [ln for ln in chunk_text.splitlines() if ln.strip()]
+    data_out = []
+    for ln in lines:
+        try:
+            entry = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        if filter_key and filter_value is not None:
+            if not (isinstance(entry, dict) and str(entry.get(filter_key)) == str(filter_value)):
+                continue
+        data_out.append(entry)
+
+    next_offset = offset + len(chunk_text)
+    chunks_used = 1 + (offset // chunk_size)
+    is_last = next_offset >= blob_size or chunks_used >= max_chunks
+    next_token = None if is_last else str(next_offset)
+
+    return {
         "status": "success",
         "user_id": user_id,
         "file": sanitized,
         "filter": {"key": filter_key, "value": filter_value} if filter_key and filter_value is not None else None,
-        "data": filtered,
-        "count": len(filtered) if isinstance(filtered, list) else 1,
-        "total": total,
+        "data": data_out,
+        "count": len(data_out),
+        "total": None,
+        "chunk_index": offset // chunk_size,
+        "is_last_chunk": is_last,
+        "next_chunk_token": next_token,
+        "chunk_size": chunk_size,
+        "processed_bytes": len(chunk_text),
+        "remainder_bytes": remainder_len,
+        "blob_size": blob_size,
     }
-    return response
 
 
 def read_many_blobs(
@@ -336,7 +456,8 @@ def read_many_blobs(
     files: List[str],
     tail_lines: int = DEFAULT_TAIL_LINES,
     tail_bytes: int = DEFAULT_TAIL_BYTES,
-    max_bytes_per_file: int = DEFAULT_MAX_BYTES_PER_FILE,
+    max_bytes_per_file: int = READ_MANY_MAX_BYTES_PER_FILE,
+    max_total_bytes: int = READ_MANY_MAX_TOTAL_BYTES,
     parse_json: bool = True,
     max_files: int = DEFAULT_READ_MANY_FILES,
 ) -> Dict[str, object]:
@@ -380,12 +501,21 @@ def read_many_blobs(
                         "bytes": bytes_read,
                         "truncated": truncated,
                         "mode": "tail",
+                        "soft_cap": max_bytes_per_file,
                     }
                 )
                 continue
 
             data, truncated = _read_prefix(blob_client, max_bytes=max_bytes_per_file)
             total_bytes += len(data)
+            
+            # Check total bytes cap
+            if max_total_bytes > 0 and total_bytes > max_total_bytes:
+                truncated = True
+                excess = total_bytes - max_total_bytes
+                data = data[: max(0, len(data) - excess)]
+                total_bytes = max_total_bytes
+            
             if parse_json:
                 try:
                     parsed = json.loads(data.decode("utf-8"))
@@ -397,8 +527,11 @@ def read_many_blobs(
                             "bytes": len(data),
                             "truncated": truncated,
                             "mode": "read",
+                            "soft_cap": max_bytes_per_file,
                         }
                     )
+                    if truncated:
+                        break
                     continue
                 except Exception:
                     pass
@@ -411,8 +544,11 @@ def read_many_blobs(
                     "bytes": len(data),
                     "truncated": truncated,
                     "mode": "read",
+                    "soft_cap": max_bytes_per_file,
                 }
             )
+            if truncated:
+                break
         except ResourceNotFoundError:
             errors += 1
             items.append({"file_name": file_name, "error": "not_found"})
@@ -428,4 +564,5 @@ def read_many_blobs(
         "count": len(items),
         "errors": errors,
         "total_bytes": total_bytes,
+        "max_total_bytes": max_total_bytes if max_total_bytes > 0 else None,
     }

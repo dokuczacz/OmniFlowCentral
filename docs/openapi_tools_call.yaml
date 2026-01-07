@@ -233,6 +233,88 @@ components:
       required:
         - tool
         - target_blob_name
+    ToolCallRequest:
+      type: object
+      description: Unified dispatcher request. Send tool at root and any relevant parameters.
+      properties:
+        tool:
+          type: string
+          enum: [list_blobs, read_blob, read_many_blobs, eli_acts_query, dataset_search, get_filtered_data]
+        user_id:
+          type: string
+          description: Optional user scope. Defaults to 'default'.
+        # list_blobs
+        prefix:
+          type: string
+          description: Optional blob name prefix filter.
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Max results for listings.
+        timeout_seconds:
+          type: integer
+          minimum: 1
+          maximum: 60
+          description: Timeout for list operations.
+        # eli_acts_query / dataset_search
+        q:
+          type: string
+          description: Query string.
+        year:
+          type: integer
+          description: Publication year filter.
+        publisher:
+          type: string
+        status:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Max results for queries.
+        tags_any:
+          type: array
+          items:
+            type: string
+          description: Tags filter (any match) for dataset_search.
+        category:
+          type: string
+          description: Optional category filter for dataset_search.
+        # read_blob
+        name:
+          type: string
+          description: Blob name to read.
+        # read_many_blobs
+        files:
+          type: array
+          items:
+            type: string
+          description: List of blob names to read.
+        max_files:
+          type: integer
+          description: Cap files processed by read_many_blobs.
+        parse_json:
+          type: boolean
+        tail_lines:
+          type: integer
+        tail_bytes:
+          type: integer
+        # get_filtered_data
+        target_blob_name:
+          type: string
+        filter_key:
+          type: string
+        filter_value:
+          type: string
+        # optional wrapper supported by backend
+        params:
+          type: object
+          additionalProperties: true
+          description: Alternative envelope for parameters (backend supports both styles).
+      required:
+        - tool
+      additionalProperties: false
 security:
   - functionKey: []
 paths:
@@ -352,13 +434,7 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: '#/components/schemas/ListBlobsRequest'
-                - $ref: '#/components/schemas/EliActsQueryRequest'
-                - $ref: '#/components/schemas/DatasetSearchRequest'
-                - $ref: '#/components/schemas/ReadBlobRequest'
-                - $ref: '#/components/schemas/ReadManyBlobsRequest'
-                - $ref: '#/components/schemas/GetFilteredDataRequest'
+              $ref: '#/components/schemas/ToolCallRequest'
             examples:
               eli_acts_query:
                 value:

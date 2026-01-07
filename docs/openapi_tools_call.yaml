@@ -1,0 +1,435 @@
+openapi: 3.1.0
+info:
+  title: OmniFlow Central GPT Tools
+  version: 0.3.0
+  description: >-
+    OpenAPI schema for OmniFlow Central tools. Direct blob endpoints and unified
+    /api/tools/call dispatcher for advanced operations (list_blobs, read_blob, eli_acts_query, dataset_search, etc.).
+servers:
+  - url: https://omniflowcentral-bagkbfera7d0hncc.switzerlandnorth-01.azurewebsites.net
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: header
+      name: x-functions-key
+      description: Azure Functions host key (required on every request).
+  schemas:
+    CapabilitiesResponse:
+      type: object
+      properties:
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+      required:
+        - capabilities
+      additionalProperties: false
+    Capability:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        method:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - name
+        - description
+        - method
+        - params
+      additionalProperties: false
+    GenericResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        result:
+          type: object
+          additionalProperties: true
+      required:
+        - status
+    ToolCallResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+        code:
+          type: string
+          description: Error code (only if status=error)
+        message:
+          type: string
+          description: Error message (only if status=error)
+        tool:
+          type: string
+        user_id:
+          type: string
+        result:
+          type: object
+          additionalProperties: true
+          description: Tool-specific result payload
+      required:
+        - status
+        - tool
+        - user_id
+    ErrorDetails:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          description: Error code (MISSING_PARAM, INVALID_TOOL, UPSTREAM_ERROR, etc.)
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        tool:
+          type: string
+        user_id:
+          type: string
+      required:
+        - status
+        - code
+        - message
+        - tool
+        - user_id
+security:
+  - functionKey: []
+paths:
+  /api/tools/capabilities:
+    get:
+      operationId: get_capabilities
+      summary: List available tools and their parameters.
+      security:
+        - functionKey: []
+      responses:
+        '200':
+          description: Tool catalog with capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+        '401':
+          description: Missing or invalid function key. Ensure x-functions-key header is set.
+  /api/list_blobs:
+    get:
+      operationId: list_blobs_get
+      summary: List blobs in the container with optional prefix filter.
+      security:
+        - functionKey: []
+      parameters:
+        - name: prefix
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional path prefix to filter blobs (e.g., "datasets/eli/metadata").
+        - name: max_results
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+          description: Maximum number of results to return (caps at 1000).
+        - name: timeout_seconds
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 60
+            default: 10
+          description: Request timeout in seconds (max 60).
+      responses:
+        '200':
+          description: Blobs listed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+              examples:
+                ok:
+                  value:
+                    status: success
+                    result:
+                      items:
+                        - name: datasets/eli/metadata/institutions.json
+                          size: 2048
+                          last_modified: '2026-01-07T10:30:00Z'
+                        - name: datasets/eli/metadata/keywords.json
+                          size: 71680
+                          last_modified: '2026-01-07T10:35:00Z'
+        '400':
+          description: Bad request (e.g., invalid parameters).
+        '401':
+          description: Missing or invalid function key.
+  /api/read_blob_file:
+    get:
+      operationId: read_blob_get
+      summary: Read a blob by name.
+      security:
+        - functionKey: []
+      parameters:
+        - name: file_name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Blob name to read (relative path, e.g., "datasets/eli/metadata/institutions.json").
+      responses:
+        '200':
+          description: Blob read successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericResponse'
+              examples:
+                json_example:
+                  value:
+                    status: success
+                    result:
+                      content: '{"institution_id": 1, "name": "Supreme Court"}'
+        '400':
+          description: Bad request (missing file_name).
+        '401':
+          description: Missing or invalid function key.
+        '404':
+          description: Blob not found.
+  /api/tools/call:
+    post:
+      operationId: tools_call
+      summary: >-
+        Unified dispatcher for advanced tools: list_blobs, read_blob, read_many_blobs, 
+        eli_acts_query, dataset_search, get_filtered_data, and more.
+        
+        Note: Parameters are sent at the root level or in a "params" object (both supported).
+      security:
+        - functionKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ListBlobsRequest'
+                - $ref: '#/components/schemas/EliActsQueryRequest'
+                - $ref: '#/components/schemas/DatasetSearchRequest'
+                - $ref: '#/components/schemas/ReadBlobRequest'
+                - $ref: '#/components/schemas/ReadManyBlobsRequest'
+                - $ref: '#/components/schemas/GetFilteredDataRequest'
+            examples:
+              eli_acts_query:
+                value:
+                  tool: eli_acts_query
+                  q: Prawo budowlane
+                  limit: 5
+              dataset_search:
+                value:
+                  tool: dataset_search
+                  q: test
+                  tags_any:
+                    - project-x
+                  limit: 10
+              list_blobs:
+                value:
+                  tool: list_blobs
+                  prefix: datasets/eli/metadata
+                  max_results: 10
+                  timeout_seconds: 30
+      responses:
+        '200':
+          description: Tool executed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolCallResponse'
+              examples:
+                eli_acts:
+                  value:
+                    status: success
+                    tool: eli_acts_query
+                    user_id: default
+                    result:
+                      items:
+                        - eli: Dz.U. 1994 nr 89 poz. 414
+                          title: Prawo budowlane
+                          year: 1994
+                          status: active
+                          publisher: Sejm RP
+                list_blobs:
+                  value:
+                    status: success
+                    tool: list_blobs
+                    user_id: default
+                    result:
+                      items:
+                        - name: datasets/eli/metadata/institutions.json
+                          size: 2048
+                          last_modified: '2026-01-07T10:30:00Z'
+        '400':
+          description: Bad request (missing/invalid tool or params).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetails'
+              examples:
+                missing_tool:
+                  value:
+                    status: error
+                    code: MISSING_PARAM
+                    message: "Missing 'tool' parameter."
+                    tool: ''
+                    user_id: default
+        '401':
+          description: Missing or invalid function key.
+        '502':
+          description: Upstream error (e.g., storage connection failed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetails'
+  # Request body schemas for /api/tools/call
+components:
+  schemas:
+    ListBlobsRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [list_blobs]
+        prefix:
+          type: string
+          description: Optional blob name prefix filter (e.g., "datasets/eli/metadata").
+        max_results:
+          type: integer
+          description: Max results (1-1000, default 200).
+          minimum: 1
+          maximum: 1000
+        timeout_seconds:
+          type: integer
+          description: Timeout in seconds (1-60, default 10).
+          minimum: 1
+          maximum: 60
+      required:
+        - tool
+    EliActsQueryRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [eli_acts_query]
+        q:
+          type: string
+          description: Search query by act title (e.g., "Prawo budowlane").
+        year:
+          type: integer
+          description: Optional filter by publication year.
+        publisher:
+          type: string
+          description: Optional filter by publisher name (e.g., "Sejm RP").
+        status:
+          type: string
+          description: Optional filter by status (e.g., "active", "repealed").
+        limit:
+          type: integer
+          description: Max results (1-50, default 10).
+          minimum: 1
+          maximum: 50
+      required:
+        - tool
+      examples:
+        - tool: eli_acts_query
+          q: Prawo budowlane
+          limit: 5
+    DatasetSearchRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [dataset_search]
+        q:
+          type: string
+          description: Optional search query.
+        tags_any:
+          type: array
+          items:
+            type: string
+          description: Optional array of tags (any match).
+        category:
+          type: string
+          description: Optional category filter.
+        limit:
+          type: integer
+          description: Max results (default 20, max 100).
+          minimum: 1
+          maximum: 100
+      required:
+        - tool
+    ReadBlobRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [read_blob]
+        name:
+          type: string
+          description: Blob name to read (relative path).
+      required:
+        - tool
+        - name
+    ReadManyBlobsRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [read_many_blobs]
+        files:
+          type: array
+          items:
+            type: string
+          description: List of blob names to read.
+        max_files:
+          type: integer
+          description: Max files to process (default 25).
+        parse_json:
+          type: boolean
+          description: Parse JSON files (default true).
+        tail_lines:
+          type: integer
+          description: Tail lines (0 = all, default 0).
+        tail_bytes:
+          type: integer
+          description: Tail bytes (0 = all, default 65536).
+      required:
+        - tool
+        - files
+    GetFilteredDataRequest:
+      type: object
+      properties:
+        tool:
+          type: string
+          enum: [get_filtered_data]
+        target_blob_name:
+          type: string
+          description: Blob to query (file_name also accepted).
+        filter_key:
+          type: string
+          description: Key to filter by.
+        filter_value:
+          type: string
+          description: Value to match.
+      required:
+        - tool
+        - target_blob_name

@@ -172,16 +172,13 @@ Always cite sources with ELI/SAOS identifiers and official references.
 
 ## Performance Notes
 
-### Safety Limits (built into blob_ops)
-- **read_blob:** 500 KB soft cap
-- **read_many_blobs:** 250 KB per file, 1.25 MB total
-- **get_filtered_data:** 50 KB chunks, paginated
+### Safety Limits
+`query_dataset` enforces the per-response soft cap (~2MB) and sets `truncated: true` when it had to drop hits, while `_contentTruncated` flags the individual records whose content was not included. Let the API trim automatically rather than trying to stream raw JSON pages yourself.
 
 ### Best Practices
-1. Use `query_dataset` with `fetch_content=true` to avoid multiple calls
-2. Set reasonable `limit` values (default 10, max 50)
-3. Use specific filters (year, publisher, etc.) to reduce result sets
-4. For large result sets, implement pagination with `next_chunk_token`
+1. Always call `query_dataset` with `fetch_content=true` when you need full records.
+2. Narrow the search with filters (year, court, status, tags) before raising the limit.
+3. Handle `truncated` / `_contentTruncated` in the assistant’s logic as a signal to explain potential missing content.
 
 ## Next Steps
 

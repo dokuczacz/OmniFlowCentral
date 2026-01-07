@@ -52,7 +52,7 @@ python scripts/saos_build_index.py --max-pages 10 --write-index
 ### Before
 ❌ **Two-step process:**
 1. Query index → get IDs/blob names
-2. Call `read_blob` or `get_filtered_data` for each → ResponseTooLargeError when files are 2-3MB
+2. Use `query_dataset` to fetch full content directly; it avoids `ResponseTooLargeError` by honoring the soft cap and returning `truncated` metadata when results were trimmed.
 
 ❌ **get_filtered_data on page files:**
 - Loads entire 100-judgment JSON array

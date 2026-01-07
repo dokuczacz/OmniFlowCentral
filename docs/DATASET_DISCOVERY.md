@@ -19,62 +19,31 @@ Files available:
 - `types.json` - Act type classifications
 - `download_summary.json` - Metadata download run info
 
-**Query example**:
-```
-GET /api/list_blobs?prefix=datasets/eli/metadata&max_results=10
-```
-
 #### Acts Pages (Full Acts Data - 159 pages)
 **Path prefix**: `datasets/eli_acts/pages/`
 
 Pages: `acts_offset_000000000.json` → `acts_offset_000078500.json`
 Each ~400-900 KB JSON with 500 acts per file.
 
-**Query example**:
-```
-POST /api/tools/call
-{
-  "tool": "read_many_blobs",
-  "params": {
-    "files": [
-      "datasets/eli_acts/pages/acts_offset_000000000.json",
-      "datasets/eli_acts/pages/acts_offset_000000500.json"
-    ]
-  }
-}
-```
-
 #### Acts Index (JSONL - Queryable)
 **Direct file**: `datasets/eli_acts/index/acts_inforce_1.jsonl`
 - 40,000+ acts indexed as newline-delimited JSON
 - **Recommended**: Use `query_dataset` with `fetch_content=true` for single-call queries
 
-**Query example (recommended - unified tool):**
+Use `query_dataset` with `fetch_content=true` to read the legislation index in one call:
 ```json
 POST /api/tools/call
 {
   "tool": "query_dataset",
   "params": {
     "dataset": "eli_acts",
-    "q": "finansowanie społecznościowe",
+    "q": "finansowanie spo�eczne",
     "limit": 10,
     "fetch_content": true
   }
 }
 ```
-
-**Legacy alternative:**
-```json
-POST /api/tools/call
-{
-  "tool": "eli_acts_query",
-  "params": {
-    "q": "finansowanie społecznościowe",
-    "limit": 10
-  }
-}
-```
-> Note: `eli_acts_query` is deprecated. Use `query_dataset` for better performance.
+`query_dataset` searches the JSONL index, applies filters, and returns `_fullContent` plus `provenance` metadata. Legacy helpers like `eli_acts_query` are deprecated and not required for Custom GPT.
 
 ### 2. SAOS (Supreme Court) – Judgments Database
 
@@ -85,22 +54,21 @@ Pages available: `page_00000.json` → `page_00199.json`
 Each ~1.6-2.2 MB JSON with 100 judgments per page.
 **Total**: 200 pages = 20,000 judgments (~400 MB)
 
-**Query example**:
-```
-GET /api/list_blobs?prefix=datasets/saos/judgments/pages&max_results=10
-```
-
-**Read example**:
+**Targeted access pattern**:
 ```json
 POST /api/tools/call
 {
-  "tool": "read_blob",
+  "tool": "query_dataset",
   "params": {
-    "name": "datasets/saos/judgments/pages/page_00000.json"
+    "dataset": "saos_judgments",
+    "q": "Amber Gold",
+    "court": "Gdańsk",
+    "limit": 10,
+    "fetch_content": true
   }
 }
 ```
-> Note: Single files are capped at 500KB. For larger files, use chunking or query_dataset.
+`query_dataset` searches the judgments index and returns the matching judgments with full content when `fetch_content=true`; there is no need to read the raw page files or the huge index blob directly.
 
 #### Judgments Index
 **Status**: ✅ **Index ready!**
@@ -123,19 +91,6 @@ POST /api/tools/call
     "fetch_content": true
   }
 }
-```
-
-**Direct read (for inspection only):**
-```json
-POST /api/tools/call
-{
-  "tool": "read_blob",
-  "params": {
-    "name": "datasets/saos/judgments/index/judgments_index.jsonl"
-  }
-}
-```
-> Warning: This file is 338MB. Direct read will be truncated at 500KB soft cap. Use query_dataset instead.
 ```
 
 #### SAOS Metadata (Legacy - Common Courts)
@@ -165,11 +120,7 @@ Files: `download_summary.json` with run info.
 
 ## Usage Patterns
 
-### Pattern 1: List dataset files
-```http
-GET /api/list_blobs?prefix=datasets/eli/metadata&timeout_seconds=30
-```
-Query datasets (recommended)
+### Pattern 1: Search legislation
 ```json
 POST /api/tools/call
 {
@@ -183,36 +134,40 @@ POST /api/tools/call
   }
 }
 ```
-> Use `query_dataset` with `fetch_content=true` to get complete records in one call. "parse_json": true
+
+### Pattern 2: Search judgments
+```json
+POST /api/tools/call
+{
+  "tool": "query_dataset",
+  "params": {
+    "dataset": "saos_judgments",
+    "q": "Amber Gold",
+    "court": "Gda�sk",
+    "limit": 10,
+    "fetch_content": true
   }
 }
 ```
 
-### Pattern 3: Search acts
+### Pattern 3: Discover datasets through manifests
 ```json
 POST /api/tools/call
 {
-  "tool": "eli_acts_query",
+  "tool": "dataset_search",
   "params": {
-    "q": "konsorcjum",
-    "year_from": 2020,
-    "limit": 20
+    "user_id": "public",
+    "tags_any": ["dataset"],
+    "limit": 10
   }
 }
 ```
 
-### Pattern 4: Filter dataset entries
-```json
-POST /api/tools/call
-{
-  "tool": "get_filtered_data",
-  "params": {
-    "target_blob_name": "datasets/eli/metadata/types.json",
-    "filter_key": "active",
-    "filter_value": true
-  }
-}
-```
+### Quick rules
+1. Use `query_dataset` with `fetch_content=true` for all dataset content.
+2. Apply filters first (court, year, tags) to reduce result size.
+3. Leverage `dataset_search` to inspect manifests before querying.
+4. Listing blobs or reading raw JSON is only for diagnostics; the programmers do not need that in the Custom GPT workflow.
 
 ---
 Use query_dataset with fetch_content=true** – Best performance, single call for data + content

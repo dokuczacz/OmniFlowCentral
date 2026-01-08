@@ -724,7 +724,14 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        
+
+        # Normalize index fields across datasets so the contract is stable:
+        # - eli_acts uses `ELI` (id) and `pos` (position) in index
+        # - saos_judgments uses `pageId` and `recordIndex` in index
+        if dataset_name == "eli_acts":
+            record.setdefault("pageId", record.get("ELI"))
+            record.setdefault("recordIndex", record.get("pos"))
+
         # Apply filters based on dataset type
         if not _matches_filters(record, params, dataset_name):
             continue

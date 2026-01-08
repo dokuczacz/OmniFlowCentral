@@ -114,6 +114,8 @@ def test_query_dataset_eli_lookup_by_page_id_alias():
     assert resp["status"] == "success"
     assert resp["total_returned"] == 1
     assert resp["hits"][0]["ELI"] == "DU/2003/2065"
+    assert resp["hits"][0]["pageId"] == "DU/2003/2065"
+    assert resp["hits"][0]["recordIndex"] == 2065
 
 
 def test_query_dataset_saos_lookup_by_page_and_record_index_fetches_content():

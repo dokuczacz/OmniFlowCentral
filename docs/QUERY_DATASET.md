@@ -8,6 +8,12 @@
 - **Dataset-specific filters** (year, publisher, court, etc.)
 - **Optional full content fetching** in a single API call
 
+## Mandatory Workflow (Index → Confirm → Fetch)
+For stable, lawyer-friendly behavior (no guessing, no fragile literal matches):
+1) **Index scan (candidates):** call with `fetch_content=false` to get metadata + stable IDs (`pageId`, `recordIndex`) and `provenance.index_path`.
+2) **Deterministic confirm:** re-call using `pageId` (and optionally `recordIndex`) instead of relying on `q`.
+3) **Fetch content after confirmation:** `fetch_content=true` (SAOS returns `_fullContent`; ELI currently returns metadata only).
+
 ## Why This Approach?
 
 Instead of calling separate tools:
@@ -18,10 +24,12 @@ You can now do both in one call:
 ```json
 {
   "tool": "query_dataset",
-  "dataset": "saos_judgments",
-  "q": "Amber Gold",
-  "limit": 5,
-  "fetch_content": true
+  "params": {
+    "dataset": "saos_judgments",
+    "q": "Amber Gold",
+    "limit": 5,
+    "fetch_content": true
+  }
 }
 ```
 
@@ -46,10 +54,13 @@ Polish legislative acts from Sejm ELI API.
 ```json
 {
   "tool": "query_dataset",
-  "dataset": "eli_acts",
-  "q": "Prawo budowlane",
-  "year": 2025,
-  "limit": 5
+  "params": {
+    "dataset": "eli_acts",
+    "q": "Prawo budowlane",
+    "year": 2025,
+    "limit": 5,
+    "fetch_content": false
+  }
 }
 ```
 
@@ -67,13 +78,19 @@ Polish court judgments from SAOS API.
 ```json
 {
   "tool": "query_dataset",
-  "dataset": "saos_judgments",
-  "q": "Amber Gold",
-  "court": "Gdańsk",
-  "limit": 10,
-  "fetch_content": true
+  "params": {
+    "dataset": "saos_judgments",
+    "q": "Amber Gold",
+    "court": "Gdańsk",
+    "limit": 10,
+    "fetch_content": true
+  }
 }
 ```
+
+## Query Syntax Notes
+- `q` supports a minimal boolean subset: `"A OR B"` and `"A AND B"` (case-insensitive). No parentheses/quotes.
+- Prefer deterministic confirmation by `pageId`/`recordIndex` over literal full-title queries.
 
 ## Response Format
 

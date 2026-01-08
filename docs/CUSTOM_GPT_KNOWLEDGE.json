@@ -1,6 +1,6 @@
 {
   "title": "OmniFlow Central - Custom GPT Knowledge (AGENT ONLY)",
-  "version": "2026-01-07",
+  "version": "2026-01-08",
   "scope": {
     "canonical": true,
     "allowed_tools": [
@@ -99,8 +99,15 @@
       },
       "behavior": [
         "Reads the dataset index and returns matching hits.",
-        "When fetch_content=true, returns full act/judgment content."
+        "When fetch_content=true, returns full SAOS judgment content; ELI returns metadata only (no act text stored yet)."
       ],
+      "workflow": {
+        "index_first": [
+          "Candidate search: fetch_content=false to get IDs (pageId, recordIndex) + provenance.index_path.",
+          "Confirm candidate: use pageId/recordIndex, not q, for deterministic matching.",
+          "Fetch content after confirmation (SAOS only)."
+        ]
+      },
       "q_syntax": {
         "boolean_subset": [
           "A OR B",

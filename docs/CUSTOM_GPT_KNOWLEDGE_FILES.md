@@ -41,6 +41,11 @@ For deterministic E2E confirmations (index → fetch), you may also pass:
 - `pageId` (ELI: ELI id like `DU/2025/1882`; SAOS: page id like `page_00001`)
 - `recordIndex` (ELI: `pos`; SAOS: index within page array, requires `pageId`)
 
+Index-first workflow (MANDATORY):
+1) Search index broadly with `fetch_content=false` to obtain candidates + `pageId`/`recordIndex`.
+2) Confirm candidate deterministically using `pageId`/`recordIndex` (not `q`).
+3) Only then request content (`fetch_content=true`) for SAOS.
+
 Query syntax:
 - `q` supports a minimal boolean subset: `"A OR B"` and `"A AND B"` (case-insensitive).
 - Always set `fetch_content` explicitly; do not assume a default.

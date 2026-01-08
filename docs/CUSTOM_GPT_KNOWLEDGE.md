@@ -42,6 +42,11 @@ Example (SAOS):
 }
 ```
 
+MANDATORY INDEX-FIRST WORKFLOW (lawyer-user):
+1) Candidate search (index scan): call `query_dataset` with `fetch_content=false` to get candidates + stable IDs (`pageId`, `recordIndex`) and `provenance.index_path`.
+2) Confirm candidate (deterministic): re-call `query_dataset` using `pageId` (and optionally `recordIndex`) instead of relying on `q`.
+3) Only after confirmation: use `fetch_content=true` (SAOS returns `_fullContent`; ELI currently returns metadata only).
+
 Query syntax note:
 - The backend supports a minimal boolean subset in `q`: `"A OR B"` or `"A AND B"` (case-insensitive). No parentheses/quotes.
 - Prefer setting `fetch_content` explicitly in every call (do not assume a default).

@@ -101,6 +101,13 @@
         "Reads the dataset index and returns matching hits.",
         "When fetch_content=true, returns full act/judgment content."
       ],
+      "q_syntax": {
+        "boolean_subset": [
+          "A OR B",
+          "A AND B"
+        ],
+        "notes": "Case-insensitive. No parentheses or quotes."
+      },
       "truncation": {
         "soft_cap_bytes_approx": 2000000,
         "response_flag": "truncated",

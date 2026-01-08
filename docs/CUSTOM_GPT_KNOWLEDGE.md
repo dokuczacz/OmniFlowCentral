@@ -42,6 +42,10 @@ Example (SAOS):
 }
 ```
 
+Query syntax note:
+- The backend supports a minimal boolean subset in `q`: `"A OR B"` or `"A AND B"` (case-insensitive). No parentheses/quotes.
+- Prefer setting `fetch_content` explicitly in every call (do not assume a default).
+
 Example (ELI deterministic fetch by ELI id):
 ```json
 {

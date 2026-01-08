@@ -55,6 +55,51 @@ def test_query_dataset_eli_matches_display_address():
     assert resp["hits"][0]["ELI"] == "DU/2025/1882"
 
 
+def test_query_dataset_eli_or_query_matches_display_address():
+    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    line = json.dumps(
+        {
+            "ELI": "DU/2025/1882",
+            "displayAddress": "Dz.U. 2025 poz. 1882",
+            "publisher": "DU",
+            "year": 2025,
+            "pos": 1882,
+            "title": "Ustawa testowa",
+            "status": "obowiązujący",
+        },
+        ensure_ascii=False,
+    )
+    blobs = {index_path: (line + "\n").encode("utf-8")}
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset({"dataset": "eli_acts", "q": "nope OR Dz.U. 2025 poz. 1882", "limit": 5})
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+
+
+def test_query_dataset_saos_and_query_matches_case_number_and_court():
+    index_path = "datasets/saos/judgments/index/judgments_index.jsonl"
+    index_line = json.dumps(
+        {
+            "caseNumber": "VIII Kop 254/09",
+            "court": "Sąd Okręgowy w Warszawie",
+            "courtType": "common",
+            "pageId": "page_00001",
+            "recordIndex": 0,
+            "summary": "test",
+        },
+        ensure_ascii=False,
+    )
+    blobs = {index_path: (index_line + "\n").encode("utf-8")}
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset({"dataset": "saos_judgments", "q": "kop 254/09 AND warszawie", "limit": 5})
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+
+
 def test_query_dataset_eli_lookup_by_page_id_alias():
     index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
     line = json.dumps(

@@ -816,6 +816,20 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
 
 def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
     """Check if record matches text search query."""
+    def _normalize_boolean_query(raw: str) -> tuple[str, list[str]]:
+        # Support extremely small subset of boolean syntax for lawyer-style queries:
+        # - "A OR B" means any term matches
+        # - "A AND B" means all terms match
+        # No parentheses, no precedence, no quotes.
+        lowered = str(raw or "").strip().lower()
+        if " or " in lowered:
+            terms = [t.strip() for t in lowered.split(" or ") if t.strip()]
+            return "or", terms
+        if " and " in lowered:
+            terms = [t.strip() for t in lowered.split(" and ") if t.strip()]
+            return "and", terms
+        return "single", [lowered] if lowered else []
+
     if dataset_name == "eli_acts":
         searchable = " ".join(
             [
@@ -826,7 +840,12 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
                 str(record.get("type") or ""),
             ]
         ).lower()
-        return query in searchable
+        mode, terms = _normalize_boolean_query(query)
+        if mode == "or":
+            return any(term in searchable for term in terms)
+        if mode == "and":
+            return all(term in searchable for term in terms)
+        return bool(terms) and terms[0] in searchable
 
     elif dataset_name == "saos_judgments":
         # Search in summary, caseNumber, and court name
@@ -837,8 +856,13 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
                 str(record.get("court") or ""),
             ]
         ).lower()
-        return query in searchable
-    
+        mode, terms = _normalize_boolean_query(query)
+        if mode == "or":
+            return any(term in searchable for term in terms)
+        if mode == "and":
+            return all(term in searchable for term in terms)
+        return bool(terms) and terms[0] in searchable
+
     return False
 
 

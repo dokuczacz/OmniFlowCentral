@@ -41,6 +41,10 @@ For deterministic E2E confirmations (index → fetch), you may also pass:
 - `pageId` (ELI: ELI id like `DU/2025/1882`; SAOS: page id like `page_00001`)
 - `recordIndex` (ELI: `pos`; SAOS: index within page array, requires `pageId`)
 
+Query syntax:
+- `q` supports a minimal boolean subset: `"A OR B"` and `"A AND B"` (case-insensitive).
+- Always set `fetch_content` explicitly; do not assume a default.
+
 ### Use `dataset_search` for manifest discovery
 ```
 {

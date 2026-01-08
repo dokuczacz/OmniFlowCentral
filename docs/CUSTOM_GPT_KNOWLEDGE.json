@@ -72,6 +72,16 @@
         "court_type": {
           "required": false,
           "type": "string"
+        },
+        "pageId": {
+          "required": false,
+          "type": "string",
+          "description": "Deterministic lookup key. eli_acts: ELI id like DU/2025/1882. saos_judgments: page id like page_00001."
+        },
+        "recordIndex": {
+          "required": false,
+          "type": "integer",
+          "description": "Deterministic lookup key. eli_acts: pos. saos_judgments: index within page array (requires pageId)."
         }
       },
       "filters_shape": "top_level_only",
@@ -148,6 +158,14 @@
         "limit": 5,
         "fetch_content": true,
         "court_type": "common"
+      }
+    },
+    {
+      "tool": "query_dataset",
+      "params": {
+        "dataset": "eli_acts",
+        "pageId": "DU/2025/1882",
+        "fetch_content": false
       }
     },
     {

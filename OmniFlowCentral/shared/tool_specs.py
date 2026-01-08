@@ -147,6 +147,8 @@ TOOL_SPECS = {
             "status": "optional string (ELI: filter by status)",
             "court": "optional string (SAOS: filter by court name)",
             "court_type": "optional string (SAOS: filter by court type)",
+            "pageId": "optional string (ELI: ELI id like DU/2025/1882; SAOS: page blob id like page_00001)",
+            "recordIndex": "optional int (ELI: pos; SAOS: index within page array; requires pageId for SAOS)",
         },
     },
 }

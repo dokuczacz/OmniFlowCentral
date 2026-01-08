@@ -37,6 +37,10 @@ Primary datasets:
 
 Set `fetch_content=true` when you want the full act or judgment. Filters must be passed as top-level keys inside `params` (e.g., `court_type`, `year`) — do not send a nested `filters={...}` object. The API automatically enforces soft caps and returns `warning`/`truncated` metadata plus `_contentTruncated` flags when payloads are trimmed.
 
+For deterministic E2E confirmations (index → fetch), you may also pass:
+- `pageId` (ELI: ELI id like `DU/2025/1882`; SAOS: page id like `page_00001`)
+- `recordIndex` (ELI: `pos`; SAOS: index within page array, requires `pageId`)
+
 ### Use `dataset_search` for manifest discovery
 ```
 {

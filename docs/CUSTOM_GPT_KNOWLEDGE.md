@@ -18,6 +18,12 @@ query_dataset
 - `params.q` (optional): string
 - `params.limit` (optional): int (1..100)
 - `params.fetch_content` (optional): bool
+- `params.pageId` (optional): deterministic lookup key
+  - `eli_acts`: ELI id like `DU/2025/1882`
+  - `saos_judgments`: page id like `page_00001`
+- `params.recordIndex` (optional): deterministic lookup key
+  - `eli_acts`: `pos`
+  - `saos_judgments`: index within page array (requires `pageId`)
 - Filters MUST be top-level keys inside `params` (DO NOT send `filters={...}`)
   - `eli_acts`: `year`, `publisher`, `status`
   - `saos_judgments`: `court`, `court_type`
@@ -32,6 +38,18 @@ Example (SAOS):
     "limit": 5,
     "fetch_content": true,
     "court_type": "common"
+  }
+}
+```
+
+Example (ELI deterministic fetch by ELI id):
+```json
+{
+  "tool": "query_dataset",
+  "params": {
+    "dataset": "eli_acts",
+    "pageId": "DU/2025/1882",
+    "fetch_content": false
   }
 }
 ```

@@ -278,6 +278,17 @@ components:
         court_type:
           type: string
           description: Court type filter (SAOS).
+        pageId:
+          type: string
+          description: >-
+            Deterministic index lookup key. For eli_acts this is the ELI id (e.g. "DU/2025/1882").
+            For saos_judgments this is the page blob id (e.g. "page_00001"). When used with recordIndex,
+            allows precise index→fetch workflows without relying on text search.
+        recordIndex:
+          type: integer
+          description: >-
+            Deterministic index lookup key. For eli_acts this is the act position (`pos`).
+            For saos_judgments this is the index within the page array and requires pageId.
         tags_any:
           type: array
           items:

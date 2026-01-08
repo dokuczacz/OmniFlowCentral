@@ -663,6 +663,33 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     limit = max(1, min(limit, 100))
     
     fetch_content = bool(params.get("fetch_content", False))
+
+    page_id = params.get("pageId")
+    if page_id in ("", None):
+        page_id = params.get("page_id")
+    if page_id in ("", None) and dataset_name == "eli_acts":
+        page_id = params.get("ELI") or params.get("eli")
+    if page_id is not None:
+        page_id = str(page_id).strip()
+        if page_id == "":
+            page_id = None
+
+    record_index = params.get("recordIndex")
+    if record_index in ("", None):
+        record_index = params.get("record_index")
+    if record_index is not None and record_index != "":
+        try:
+            record_index = int(record_index)
+        except (TypeError, ValueError):
+            raise ToolError("VALIDATION_FAILED", "Parameter 'recordIndex' must be an integer.")
+    else:
+        record_index = None
+
+    if dataset_name == "saos_judgments" and record_index is not None and not page_id:
+        raise ToolError(
+            "VALIDATION_FAILED",
+            "Parameter 'recordIndex' requires 'pageId' for saos_judgments lookups.",
+        )
     
     # Read the NDJSON index
     container_client = _connect_container()
@@ -701,7 +728,21 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
         # Apply filters based on dataset type
         if not _matches_filters(record, params, dataset_name):
             continue
-        
+
+        # Deterministic index lookup (preferred for E2E confirmations).
+        if page_id or record_index is not None:
+            if dataset_name == "eli_acts":
+                # ELI uses ELI identifier (e.g., DU/2025/1882) and pos.
+                if page_id and str(record.get("ELI") or "").strip() != page_id:
+                    continue
+                if record_index is not None and record.get("pos") != record_index:
+                    continue
+            elif dataset_name == "saos_judgments":
+                if page_id and str(record.get("pageId") or "").strip() != page_id:
+                    continue
+                if record_index is not None and record.get("recordIndex") != record_index:
+                    continue
+
         # Text search across relevant fields
         if q and not _text_search_match(record, q, dataset_name):
             continue
@@ -714,6 +755,14 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     # Optionally fetch full content for matched records
     if fetch_content:
         results = _attach_full_content(results, container_client, dataset_name)
+        if dataset_name == "eli_acts":
+            response_warning = (
+                "ELI dataset currently returns metadata only; full act text is not stored in blob yet."
+            )
+        else:
+            response_warning = None
+    else:
+        response_warning = None
     
     response = {
         "status": "success",
@@ -727,6 +776,8 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
             "index_path": index_path,
         },
     }
+    if response_warning:
+        response["warning"] = response_warning
     return _apply_response_soft_cap(response)
 
 
@@ -766,9 +817,17 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
 def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
     """Check if record matches text search query."""
     if dataset_name == "eli_acts":
-        title = str(record.get("title") or "").lower()
-        return query in title
-    
+        searchable = " ".join(
+            [
+                str(record.get("title") or ""),
+                str(record.get("displayAddress") or ""),
+                str(record.get("ELI") or ""),
+                str(record.get("address") or ""),
+                str(record.get("type") or ""),
+            ]
+        ).lower()
+        return query in searchable
+
     elif dataset_name == "saos_judgments":
         # Search in summary, caseNumber, and court name
         searchable = " ".join(

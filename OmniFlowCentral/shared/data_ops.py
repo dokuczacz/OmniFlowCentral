@@ -762,12 +762,7 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     # Optionally fetch full content for matched records
     if fetch_content:
         results = _attach_full_content(results, container_client, dataset_name)
-        if dataset_name == "eli_acts":
-            response_warning = (
-                "ELI dataset currently returns metadata only; full act text is not stored in blob yet."
-            )
-        else:
-            response_warning = None
+        response_warning = None
     else:
         response_warning = None
     
@@ -884,7 +879,39 @@ def _attach_full_content(
     
     for record in results:
         # Determine blob path based on dataset structure
-        if dataset_name == "saos_judgments":
+        if dataset_name == "eli_acts":
+            eli_id = str(record.get("pageId") or record.get("ELI") or "").strip()
+            if not eli_id:
+                record["txt_missing"] = True
+                record["txt_status"] = "skipped"
+                enriched.append(record)
+                continue
+
+            base_prefix = str(DATASET_INDEX_REGISTRY.get("eli_acts", "")).rsplit("/index/", 1)[0]
+            if not base_prefix:
+                base_prefix = "users/public/datasets/eli_acts"
+            text_blob = f"{base_prefix}/text/{eli_id}.txt"
+
+            try:
+                blob_client = container_client.get_blob_client(text_blob)
+                raw = blob_client.download_blob().readall()
+                text = raw.decode("utf-8", "replace")
+                record["txt_missing"] = False
+                record["txt_status"] = "skipped" if text.lstrip().startswith("[SKIPPED]") else "ok"
+                if max_content_bytes and len(raw) > max_content_bytes:
+                    record["_fullTextTruncated"] = True
+                else:
+                    record["_fullText"] = text
+            except ResourceNotFoundError:
+                record["txt_missing"] = True
+                record["txt_status"] = "skipped"
+            except Exception as e:
+                logging.warning(f"Could not fetch ELI text for {text_blob}: {e}")
+                record["txt_missing"] = True
+                record["txt_status"] = "skipped"
+                record["_contentError"] = str(e)
+
+        elif dataset_name == "saos_judgments":
             page_id = record.get("pageId", "")
             if not page_id:
                 enriched.append(record)

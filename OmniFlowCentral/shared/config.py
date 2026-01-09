@@ -8,14 +8,7 @@ from typing import Optional
 from .logging_setup import configure_azure_sdk_logging
 
 
-_AZURITE_DEFAULT_CONNECTION_STRING = (
-    "DefaultEndpointsProtocol=http;"
-    "AccountName=devstoreaccount1;"
-    "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
-    "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
-    "QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;"
-    "TableEndpoint=http://127.0.0.1:10002/devstoreaccount1"
-)
+_AZURITE_DEFAULT_CONNECTION_STRING = "UseDevelopmentStorage=true"
 
 
 def _is_valid_connection_string(raw: str) -> bool:

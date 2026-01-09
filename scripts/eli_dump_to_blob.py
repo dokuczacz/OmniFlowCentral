@@ -24,12 +24,15 @@ from OmniFlowCentral.shared.config import AzureConfig
 ELI_BASE_URL = "https://api.sejm.gov.pl/eli"
 
 
-def _ensure_container_exists() -> None:
-    if not AzureConfig.CONNECTION_STRING or not AzureConfig.CONTAINER_NAME:
-        raise ToolError("UPSTREAM_ERROR", "Missing Azure storage configuration for container initialization.")
-    service = BlobServiceClient.from_connection_string(AzureConfig.CONNECTION_STRING)
+def _ensure_container_exists(*, connection_string: str, container_name: str) -> None:
+    if not connection_string or not container_name:
+        raise ToolError(
+            "UPSTREAM_ERROR",
+            "Missing Azure storage configuration for container initialization.",
+        )
+    service = BlobServiceClient.from_connection_string(connection_string)
     try:
-        service.create_container(AzureConfig.CONTAINER_NAME)
+        service.create_container(container_name)
     except ResourceExistsError:
         return
 
@@ -68,21 +71,23 @@ def _extract_paging(payload: Dict) -> Tuple[int, int, int]:
     return offset, count, total
 
 
-def _list_page_blobs(*, user_id: str, blob_prefix: str) -> List[str]:
-    service = BlobServiceClient.from_connection_string(AzureConfig.CONNECTION_STRING)
-    container = service.get_container_client(AzureConfig.CONTAINER_NAME)
+def _list_page_blobs(
+    *, connection_string: str, container_name: str, user_id: str, blob_prefix: str
+) -> List[str]:
+    service = BlobServiceClient.from_connection_string(connection_string)
+    container = service.get_container_client(container_name)
     prefix = f"users/{user_id}/{blob_prefix.rstrip('/')}/pages/"
-    names = [b.name for b in container.list_blobs(name_starts_with=prefix)]
+    names = [b.name for b in container.list_blobs(name_starts_with=prefix)]     
     return sorted(names)
 
 
-def _download_json_blob(blob_name: str) -> Dict:
-    service = BlobServiceClient.from_connection_string(AzureConfig.CONNECTION_STRING)
-    container = service.get_container_client(AzureConfig.CONTAINER_NAME)
-    raw = container.get_blob_client(blob_name).download_blob().readall()
+def _download_json_blob(*, connection_string: str, container_name: str, blob_name: str) -> Dict:
+    service = BlobServiceClient.from_connection_string(connection_string)
+    container = service.get_container_client(container_name)
+    raw = container.get_blob_client(blob_name).download_blob().readall()        
     payload = json.loads(raw)
     if not isinstance(payload, dict):
-        raise ValueError("Unexpected stored page payload (expected object)")
+        raise ValueError("Unexpected stored page payload (expected object)")    
     return payload
 
 
@@ -93,7 +98,17 @@ def main() -> int:
     parser.add_argument(
         "--user-id",
         default="public",
-        help="Storage namespace under users/{user_id}/ (default: public).",
+        help="Storage namespace under users/{user_id}/ (default: public).",     
+    )
+    parser.add_argument(
+        "--connection-string",
+        default="",
+        help="Override storage connection string (otherwise uses environment / AzureConfig).",
+    )
+    parser.add_argument(
+        "--container-name",
+        default="",
+        help="Override container name (otherwise uses environment / AzureConfig).",
     )
     parser.add_argument(
         "--blob-prefix",
@@ -129,10 +144,15 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Fetch but do not upload to blob.")
     args = parser.parse_args()
 
+    connection_string = (args.connection_string or "").strip() or (AzureConfig.CONNECTION_STRING or "").strip()
+    container_name = (args.container_name or "").strip() or (AzureConfig.CONTAINER_NAME or "").strip()
+    if not connection_string or not container_name:
+        raise ToolError("UPSTREAM_ERROR", "Missing Azure storage configuration.")
+
     extra_params = {"inForce": "1"}
     extra_params.update(_parse_kv_pairs(args.param))
     if not args.dry_run:
-        _ensure_container_exists()
+        _ensure_container_exists(connection_string=connection_string, container_name=container_name)
 
     pages_fetched = 0
     next_offset = max(0, int(args.offset))
@@ -158,13 +178,22 @@ def main() -> int:
         if args.build_index_from_blob:
             if not args.write_index_jsonl:
                 raise ValueError("--build-index-from-blob requires --write-index-jsonl")
-            page_blob_names = _list_page_blobs(user_id=args.user_id, blob_prefix=args.blob_prefix)
+            page_blob_names = _list_page_blobs(
+                connection_string=connection_string,
+                container_name=container_name,
+                user_id=args.user_id,
+                blob_prefix=args.blob_prefix,
+            )
             if not page_blob_names:
-                raise ValueError("No page blobs found to build index from.")
+                raise ValueError("No page blobs found to build index from.")    
             total = None
             for name in page_blob_names:
-                page = _download_json_blob(name)
-                page_offset, page_count, page_total = _extract_paging(page)
+                page = _download_json_blob(
+                    connection_string=connection_string,
+                    container_name=container_name,
+                    blob_name=name,
+                )
+                page_offset, page_count, page_total = _extract_paging(page)     
                 if total is None:
                     total = page_total
                 blob_rel = name.split(f"users/{args.user_id}/", 1)[-1]

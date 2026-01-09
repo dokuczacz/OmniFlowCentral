@@ -148,6 +148,9 @@ def main() -> int:
     container_name = (args.container_name or "").strip() or (AzureConfig.CONTAINER_NAME or "").strip()
     if not connection_string or not container_name:
         raise ToolError("UPSTREAM_ERROR", "Missing Azure storage configuration.")
+    # Ensure shared helpers (upload_blob, manifest updates) use the overridden target.
+    AzureConfig.CONNECTION_STRING = connection_string
+    AzureConfig.CONTAINER_NAME = container_name
 
     extra_params = {"inForce": "1"}
     extra_params.update(_parse_kv_pairs(args.param))

@@ -161,4 +161,30 @@ python scripts/eli_dump_to_blob.py --max-pages 5 --write-index-jsonl
 Custom GPT can now:
 - Search datasets without worrying about file sizes
 - Get full content in one call when needed
-- Use simpler prompts: "Find Amber Gold cases in SAOS" → calls `query_dataset` with `fetch_content=true`
+- Use simpler prompts: "Find Amber Gold cases in SAOS" -> calls `query_dataset` with `fetch_content=true`
+
+## Action Plan
+
+### MUST FIX (P0)
+- Add year/publisher indexing for ELI (78K scan is slow).
+- Add parallel blob fetching for SAOS `fetch_content=true` (capped workers).
+- Add per-blob timeouts and graceful upstream error handling.
+
+### SHOULD FIX (P1)
+- Implement pagination/cursor for `query_dataset` (beyond top-N).
+- Add lightweight relevance ranking (deterministic, explainable).
+- Validate SAOS `recordIndex` bounds against the page array length.
+
+### NICE TO HAVE (P2)
+- Add fuzzy search (typos).
+- Add Polish stemming/normalization (inflections).
+- Refactor shared utilities (clamping/soft-cap/query parsing).
+- Add metrics/logging (duration/scanned/fetch_count/soft-cap hits).
+
+### Data/Structure Follow-ups
+- Correct ELI "pages count" assumptions: `pages/acts_offset_*.json` are paged responses (typically ~150-200 blobs for ~78k records), not tens of thousands of blobs.
+- SAOS metadata gaps (for cross-citations): add `datasets/saos/judgments/metadata/legalBases.json` and a complete `datasets/saos/judgments/metadata/courts.json` (mirror from SAOS sources).
+- Coverage gaps are not bugs: if Supreme Court/admin courts are required, ingest/register additional datasets (separate from `saos_judgments`).
+
+### Contract Alignment
+- Keep `/api/tools/call` request shape stable (`tool` + `params`), and ensure docs/OpenAPI/backend/index fields stay aligned (see `docs/CONTRACT_ALIGNMENT_ISSUES.md`).

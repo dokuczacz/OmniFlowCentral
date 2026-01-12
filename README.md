@@ -43,21 +43,16 @@ Both HTTP triggers are `authLevel: function`.
 
 ### Available Tools
 
-Standard CRUD tools:
-- `list_blobs`, `upload_blob`, `delete_blob`, `read_blob`, `read_many_blobs`
-- `get_filtered_data`, `upload_data_or_file`, `add_new_data`, `update_data_entry`, `remove_data_entry`
-- `manage_files`, `dataset_search`
+Primary dataset tool:
+- `query_dataset` (unified): `eli_acts`, `saos_judgments`
+  - Contract + examples: `docs/QUERY_DATASET.md`
 
-Public datasets:
-- `eli_acts_query` - Query Polish legislative acts from Sejm ELI API (59,000 records)
-  - Filters: `q` (title search), `year`, `publisher`, `status`, `limit`
-  - See [`docs/ELI_INTEGRATION_SUMMARY.md`](docs/ELI_INTEGRATION_SUMMARY.md) for details
+Discovery tool:
+- `dataset_search` (manifest discovery / dataset listing)
 
 ## OpenAPI (for Custom GPT Actions)
 
-- Final working spec: [docs/actions_openai_combined_read.yaml](docs/actions_openai_combined_read.yaml)
-- Minimal (capabilities only): [docs/actions_openai_WORKING.json](docs/actions_openai_WORKING.json)
-- Use the raw GitHub URL to the file when importing into GPT Builder (server URL must point to the deployed Function App).
+- Tools contract: `docs/openapi_tools_call.yaml`
 
 ## Data import (ELI / Sejm)
 
@@ -81,7 +76,7 @@ $env:AZURE_BLOB_CONTAINER_NAME = "omniflowcentralcustomgpt"
 python .\\scripts\\eli_index_export.py --output data/eli_acts_index.jsonl
 ```
 
-After exporting, you can inspect `docs/eli_acts_data_export.md` for a Markdown summary of the converted dataset (sample rows, run metadata, storage layout).
+After exporting, use `docs/QUERY_DATASET.md` for the current query contract and examples.
 
 ## CI/CD (GitHub Actions)
 

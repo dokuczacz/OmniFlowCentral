@@ -514,7 +514,7 @@ paths:
                           recordIndex: 17
                           _contentTruncated: true
                       provenance:
-                        index_path: datasets/saos/judgments/index/judgments_index.jsonl
+                        index_path: users/public/datasets/saos/judgments/index/judgments_index.jsonl
                 list_blobs:
                   value:
                     status: success

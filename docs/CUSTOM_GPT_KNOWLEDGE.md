@@ -45,7 +45,13 @@ Example (SAOS):
 MANDATORY INDEX-FIRST WORKFLOW (lawyer-user):
 1) Candidate search (index scan): call `query_dataset` with `fetch_content=false` to get candidates + stable IDs (`pageId`, `recordIndex`) and `provenance.index_path`.
 2) Confirm candidate (deterministic): re-call `query_dataset` using `pageId` (and optionally `recordIndex`) instead of relying on `q`.
-3) Only after confirmation: use `fetch_content=true` (SAOS returns `_fullContent`; ELI currently returns metadata only).
+3) Only after confirmation: use `fetch_content=true`.
+   - SAOS may return `_fullContent` (or `_contentTruncated=true` if too large).
+   - ELI may return `_fullText` (or `_fullTextTruncated=true` if too large) plus `txt_missing`/`txt_status`.
+
+ELI gotchas (common):
+- ELI `pageId` is `DU/<year>/<pos>` (publisher/year/position), e.g. PIT base act is `DU/1991/350` (Dz.U. 1991 nr 80 poz. 350).
+- `year=YYYY` filters publication year of the act, not “version in force in YYYY”.
 
 Query syntax note:
 - The backend supports a minimal boolean subset in `q`: `"A OR B"` or `"A AND B"` (case-insensitive). No parentheses/quotes.

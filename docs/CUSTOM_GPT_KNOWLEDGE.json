@@ -99,7 +99,8 @@
       },
       "behavior": [
         "Reads the dataset index and returns matching hits.",
-        "When fetch_content=true, returns full SAOS judgment content; ELI returns metadata only (no act text stored yet)."
+        "When fetch_content=true: SAOS may return _fullContent (or _contentTruncated=true if too large).",
+        "When fetch_content=true: ELI may return _fullText (or _fullTextTruncated=true if too large) plus txt_missing/txt_status."
       ],
       "workflow": {
         "index_first": [
@@ -118,7 +119,10 @@
       "truncation": {
         "soft_cap_bytes_approx": 2000000,
         "response_flag": "truncated",
-        "record_flag": "_contentTruncated"
+        "record_flags": [
+          "_contentTruncated",
+          "_fullTextTruncated"
+        ]
       },
       "provenance_fields": [
         "dataset",

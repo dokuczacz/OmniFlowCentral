@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -818,12 +819,32 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
 
 def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
     """Check if record matches text search query."""
+
+    def _normalize_text(raw: str) -> str:
+        text = (raw or "").strip().lower()
+        if not text:
+            return ""
+
+        # Normalize common legal source aliases to reduce false negatives.
+        # Keep it deterministic and conservative (no stemming).
+        text = re.sub(r"\bdz\.?\s*u\.?\b", "du", text)  # Dz.U., Dz U, Dz. U.
+        text = re.sub(r"\bdz\s+ust\b", "du", text)  # "dz ust"
+        text = re.sub(r"\bdziennik\s+ustaw\b", "du", text)
+
+        text = re.sub(r"\bm\.?\s*p\.?\b", "mp", text)  # M.P., M P, M. P.
+        text = re.sub(r"\bmonitor\s+polski\b", "mp", text)
+
+        # Replace punctuation with spaces to match DU/2025/1882 ~= DU 2025 1882.
+        text = re.sub(r"[\/\.\,\:\;\(\)\[\]\{\}\-\_]+", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
+
     def _normalize_boolean_query(raw: str) -> tuple[str, list[str]]:
         # Support extremely small subset of boolean syntax for lawyer-style queries:
         # - "A OR B" means any term matches
         # - "A AND B" means all terms match
         # No parentheses, no precedence, no quotes.
-        lowered = str(raw or "").strip().lower()
+        lowered = _normalize_text(str(raw or ""))
         if " or " in lowered:
             terms = [t.strip() for t in lowered.split(" or ") if t.strip()]
             return "or", terms
@@ -833,15 +854,17 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
         return "single", [lowered] if lowered else []
 
     if dataset_name == "eli_acts":
-        searchable = " ".join(
-            [
-                str(record.get("title") or ""),
-                str(record.get("displayAddress") or ""),
-                str(record.get("ELI") or ""),
-                str(record.get("address") or ""),
-                str(record.get("type") or ""),
-            ]
-        ).lower()
+        searchable = _normalize_text(
+            " ".join(
+                [
+                    str(record.get("title") or ""),
+                    str(record.get("displayAddress") or ""),
+                    str(record.get("ELI") or ""),
+                    str(record.get("address") or ""),
+                    str(record.get("type") or ""),
+                ]
+            )
+        )
         mode, terms = _normalize_boolean_query(query)
         if mode == "or":
             return any(term in searchable for term in terms)
@@ -851,13 +874,15 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
 
     elif dataset_name == "saos_judgments":
         # Search in summary, caseNumber, and court name
-        searchable = " ".join(
-            [
-                str(record.get("summary") or ""),
-                str(record.get("caseNumber") or ""),
-                str(record.get("court") or ""),
-            ]
-        ).lower()
+        searchable = _normalize_text(
+            " ".join(
+                [
+                    str(record.get("summary") or ""),
+                    str(record.get("caseNumber") or ""),
+                    str(record.get("court") or ""),
+                ]
+            )
+        )
         mode, terms = _normalize_boolean_query(query)
         if mode == "or":
             return any(term in searchable for term in terms)

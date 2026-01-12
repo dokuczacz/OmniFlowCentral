@@ -32,7 +32,7 @@ class _StubContainer:
 
 
 def test_query_dataset_eli_matches_display_address():
-    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"    
     line = json.dumps(
         {
             "ELI": "DU/2025/1882",
@@ -55,8 +55,54 @@ def test_query_dataset_eli_matches_display_address():
     assert resp["hits"][0]["ELI"] == "DU/2025/1882"
 
 
-def test_query_dataset_eli_or_query_matches_display_address():
+def test_query_dataset_eli_matches_display_address_alias_dz_ust():
     index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    line = json.dumps(
+        {
+            "ELI": "DU/2025/1882",
+            "displayAddress": "Dz.U. 2025 poz. 1882",
+            "publisher": "DU",
+            "year": 2025,
+            "pos": 1882,
+            "title": "Ustawa testowa",
+            "status": "obowiązujący",
+        },
+        ensure_ascii=False,
+    )
+    blobs = {index_path: (line + "\n").encode("utf-8")}
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset({"dataset": "eli_acts", "q": "dz ust 2025 poz 1882", "limit": 5})
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+
+
+def test_query_dataset_eli_matches_eli_id_alias_dzu_slashes():
+    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    line = json.dumps(
+        {
+            "ELI": "DU/2025/1882",
+            "displayAddress": "Dz.U. 2025 poz. 1882",
+            "publisher": "DU",
+            "year": 2025,
+            "pos": 1882,
+            "title": "Ustawa testowa",
+            "status": "obowiązujący",
+        },
+        ensure_ascii=False,
+    )
+    blobs = {index_path: (line + "\n").encode("utf-8")}
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset({"dataset": "eli_acts", "q": "dz.u. 2025/1882", "limit": 5})
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+
+
+def test_query_dataset_eli_or_query_matches_display_address():
+    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"    
     line = json.dumps(
         {
             "ELI": "DU/2025/1882",

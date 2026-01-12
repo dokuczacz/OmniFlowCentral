@@ -79,7 +79,7 @@ def test_query_dataset_eli_or_query_matches_display_address():
 
 
 def test_query_dataset_saos_and_query_matches_case_number_and_court():
-    index_path = "datasets/saos/judgments/index/judgments_index.jsonl"
+    index_path = "users/public/datasets/saos/judgments/index/judgments_index.jsonl"
     index_line = json.dumps(
         {
             "caseNumber": "VIII Kop 254/09",
@@ -119,8 +119,8 @@ def test_query_dataset_eli_lookup_by_page_id_alias():
 
 
 def test_query_dataset_saos_lookup_by_page_and_record_index_fetches_content():
-    index_path = "datasets/saos/judgments/index/judgments_index.jsonl"
-    page_path = "datasets/saos/judgments/pages/page_00001.json"
+    index_path = "users/public/datasets/saos/judgments/index/judgments_index.jsonl"
+    page_path = "users/public/datasets/saos/judgments/pages/page_00001.json"
     index_line = json.dumps(
         {
             "caseNumber": "I ACa 1/20",

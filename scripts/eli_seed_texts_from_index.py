@@ -95,9 +95,17 @@ def main() -> int:
         default="users/public/datasets/eli_acts/text",
         help="Prefix under which to write per-act .txt blobs.",
     )
-    ap.add_argument("--limit", type=int, default=100, help="How many ids to seed.")
+    ap.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="How many ids to seed. Use 0 for ALL ids from the index.",
+    )
     ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--skip-existing", action="store_true", help="Skip if destination .txt already exists.")
+    ap.add_argument("--progress-every", type=int, default=100, help="Print progress every N items.")
+    ap.add_argument("--progress-file", default="", help="Optional JSON progress file path.")
     args = ap.parse_args()
 
     cs = (args.connection_string or "").strip()
@@ -109,7 +117,9 @@ def main() -> int:
 
     index_text = _download_index(container, args.index_blob)
     ids = _iter_eli_ids(index_text)
-    ids = ids[: max(0, int(args.limit))]
+    limit = int(args.limit)
+    if limit > 0:
+        ids = ids[:limit]
 
     summary: Dict[str, int] = {"ok": 0, "skipped": 0, "errors": 0}
     meta: Dict[str, object] = {
@@ -123,9 +133,38 @@ def main() -> int:
         "finished_at": None,
     }
 
+    def write_progress(done: int, total: int) -> None:
+        if not args.progress_file:
+            return
+        try:
+            os.makedirs(os.path.dirname(args.progress_file) or ".", exist_ok=True)
+            payload = dict(meta)
+            payload.update(
+                {
+                    "updated_at": _now_iso(),
+                    "done": done,
+                    "total": total,
+                    "counts": summary,
+                }
+            )
+            with open(args.progress_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+        except Exception:
+            return
+
+    total = len(ids)
+    write_progress(0, total)
+
     for eli_id in ids:
         meta["last_eli"] = eli_id
         out_blob = f"{args.text_prefix.rstrip('/')}/{eli_id}.txt"
+        if args.skip_existing:
+            try:
+                if container.get_blob_client(out_blob).exists():
+                    summary["skipped"] += 1
+                    continue
+            except Exception:
+                pass
         if args.verbose:
             print(f"ELI {eli_id} -> {out_blob}")
 
@@ -147,7 +186,16 @@ def main() -> int:
             _upload_text(container, out_blob, f"[SKIPPED] extraction error: {e}\n")
             summary["errors"] += 1
 
+        done = summary["ok"] + summary["skipped"] + summary["errors"]
+        if int(args.progress_every) > 0 and done % int(args.progress_every) == 0:
+            print(
+                {"tool": "eli_seed_texts_from_index", "updated_at": _now_iso(), "done": done, "total": total, "counts": summary},
+                flush=True,
+            )
+            write_progress(done, total)
+
     meta["finished_at"] = _now_iso()
+    write_progress(total, total)
     meta_blob = f"{args.text_prefix.rstrip('/')}/metadata/seed_run_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
     container.get_blob_client(meta_blob).upload_blob(
         json.dumps(meta, ensure_ascii=False, indent=2).encode("utf-8"),

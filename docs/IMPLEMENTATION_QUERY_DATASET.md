@@ -103,3 +103,19 @@ python scripts/saos_build_index.py --max-pages 10 --write-index
 ✅ Backward compatible (eli_acts_query still works)
 ✅ Documented and validated
 ✅ Committed and pushed to GitHub
+
+## Ops Plan (2026-01-11)
+
+### Goal: both datasets usable in Azure
+
+**SAOS (mirror → switch registry)**
+1. Mirror blobs: `datasets/saos/...` → `users/public/datasets/saos/...` (so Custom GPT can read public namespace).
+2. After mirror is verified, switch `DATASET_INDEX_REGISTRY["saos_judgments"]` to point at `users/public/datasets/saos/...` (keep the old path temporarily for rollback).
+3. Re-run quick E2E: `query_dataset(dataset="saos_judgments")` and `fetch_content=true` on a few samples.
+
+**ELI (complete PDF→TXT on Azure)**
+1. Continue seeding missing `.txt` blobs under `users/public/datasets/eli_acts/text/<ELI>.txt`.
+2. For oversized texts: implement a chunking strategy to avoid response caps while keeping index stable.
+
+### Tool Capabilities (planned)
+- Add a lightweight guidance overlay (non-breaking) so clients can discover tools and also retrieve best-practice prompting hints without mixing it into the param schema. Prefer a separate tool or a top-level `guidance` field in `/tools/capabilities`.

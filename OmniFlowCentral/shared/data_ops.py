@@ -585,8 +585,8 @@ def dataset_search(user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
 # Dataset index registry: maps dataset names to index blob paths
 DATASET_INDEX_REGISTRY = {
-    "eli_acts": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",
-    "saos_judgments": "datasets/saos/judgments/index/judgments_index.jsonl",
+    "eli_acts": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",    
+    "saos_judgments": "users/public/datasets/saos/judgments/index/judgments_index.jsonl",
 }
 
 QUERY_DATASET_CONTENT_SOFT_CAP = 200 * 1024
@@ -876,6 +876,11 @@ def _attach_full_content(
 ) -> List[Dict]:
     """Fetch and attach full blob content for each matched record."""
     enriched = []
+
+    def _base_prefix_from_index(name: str, fallback: str) -> str:
+        index = str(DATASET_INDEX_REGISTRY.get(name, "")).strip()
+        base = index.rsplit("/index/", 1)[0] if "/index/" in index else ""
+        return base or fallback
     
     for record in results:
         # Determine blob path based on dataset structure
@@ -887,9 +892,7 @@ def _attach_full_content(
                 enriched.append(record)
                 continue
 
-            base_prefix = str(DATASET_INDEX_REGISTRY.get("eli_acts", "")).rsplit("/index/", 1)[0]
-            if not base_prefix:
-                base_prefix = "users/public/datasets/eli_acts"
+            base_prefix = _base_prefix_from_index("eli_acts", "users/public/datasets/eli_acts")
             text_blob = f"{base_prefix}/text/{eli_id}.txt"
 
             try:
@@ -917,7 +920,8 @@ def _attach_full_content(
                 enriched.append(record)
                 continue
             
-            blob_path = f"datasets/saos/judgments/pages/{page_id}.json"
+            base_prefix = _base_prefix_from_index("saos_judgments", "users/public/datasets/saos/judgments")
+            blob_path = f"{base_prefix}/pages/{page_id}.json"
             record_index = record.get("recordIndex", 0)
             
             try:

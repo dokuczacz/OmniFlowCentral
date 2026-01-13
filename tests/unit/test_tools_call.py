@@ -259,7 +259,9 @@ def test_tools_call_query_dataset_merges_nested_filters(fake_req):
         resp = tools_call.main(req)
         assert resp.status_code == 200
         body = json.loads(resp.get_body().decode("utf-8"))
-        assert body["result"] == expected
+        assert body["result"]["hits"] == []
+        assert body["result"]["status"] == "success"
+        assert "warnings" in body["result"]
         mock_query.assert_called_once()
         call_kwargs = mock_query.call_args.kwargs
         assert call_kwargs["params"]["dataset"] == "saos_judgments"

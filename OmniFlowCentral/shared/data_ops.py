@@ -820,6 +820,18 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
 def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
     """Check if record matches text search query."""
 
+    def _sanitize_saos_record(rec: Dict) -> Dict:
+        jd = rec.get("judgmentDate")
+        if isinstance(jd, str):
+            match = re.match(r"(\\d{4})", jd)
+            if match:
+                year = int(match.group(1))
+                if year < 1900 or year > 2100:
+                    rec["judgmentDate"] = None
+            else:
+                rec["judgmentDate"] = None
+        return rec
+
     def _normalize_text(raw: str) -> str:
         text = (raw or "").strip().lower()
         if not text:
@@ -873,6 +885,7 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
         return bool(terms) and terms[0] in searchable
 
     elif dataset_name == "saos_judgments":
+        record = _sanitize_saos_record(record)
         # Search in summary, caseNumber, and court name
         searchable = _normalize_text(
             " ".join(

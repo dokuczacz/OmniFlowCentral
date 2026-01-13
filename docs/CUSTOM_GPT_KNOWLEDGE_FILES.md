@@ -19,6 +19,9 @@ Datasets:
 - `eli_acts` — legislation (ELI / Dz.U. / M.P.)
 - `saos_judgments` — judgments (SAOS)
 
+Relations:
+- `saos_judgments.references.act` → `eli_acts.pageId` (many-to-one). Use this to link judgments to cited acts.
+
 Non-negotiable retrieval workflow (Scan → Confirm → Fetch):
 1) Scan with `fetch_content=false` using short keywords (`q`) to get candidates.
 2) Confirm deterministically using `pageId` (and `recordIndex` if applicable).

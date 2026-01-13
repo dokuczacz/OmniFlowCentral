@@ -85,6 +85,19 @@ components:
         - status
         - tool
         - user_id
+            - blob
+          additionalProperties: false
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required:
+        - status
+        - user_id
+      additionalProperties: false
     ErrorDetails:
       type: object
       properties:
@@ -542,7 +555,7 @@ paths:
         '401':
           description: Missing or invalid function key.
         '502':
-          description: Upstream error (e.g., storage connection failed).
+          description: Upstream error (e.g., storage connection failed).        
           content:
             application/json:
               schema:

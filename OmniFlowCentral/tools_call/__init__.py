@@ -210,8 +210,6 @@ def _handle_query_dataset(params, user_id):
         else:
             result["warnings"] = warnings
     return result
-
-
 TOOL_HANDLERS = {
     "list_blobs": _handle_list_blobs,
     "upload_blob": _handle_upload,

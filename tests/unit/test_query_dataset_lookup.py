@@ -164,7 +164,7 @@ def test_query_dataset_eli_lookup_by_page_id_alias():
     assert resp["hits"][0]["recordIndex"] == 2065
 
 
-def test_query_dataset_saos_lookup_by_page_and_record_index_fetches_content():
+def test_query_dataset_saos_lookup_by_page_and_record_index_fetches_content():  
     index_path = "users/public/datasets/saos/judgments/index/judgments_index.jsonl"
     page_path = "users/public/datasets/saos/judgments/pages/page_00001.json"
     index_line = json.dumps(
@@ -198,6 +198,30 @@ def test_query_dataset_saos_lookup_by_page_and_record_index_fetches_content():
     assert resp["status"] == "success"
     assert resp["total_returned"] == 1
     assert resp["hits"][0]["_fullContent"] == {"full": "content"}
+
+
+def test_query_dataset_saos_sanitizes_invalid_date():
+    index_path = "users/public/datasets/saos/judgments/index/judgments_index.jsonl"
+    index_line = json.dumps(
+        {
+            "caseNumber": "I ACa 1/20",
+            "court": "Sąd Apelacyjny w Gdańsku",
+            "courtType": "common",
+            "pageId": "page_00001",
+            "recordIndex": 0,
+            "judgmentDate": "0208-03-14",
+            "summary": "test",
+        },
+        ensure_ascii=False,
+    )
+    blobs = {index_path: (index_line + "\n").encode("utf-8")}
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset({"dataset": "saos_judgments", "q": "test", "limit": 5})
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+    assert resp["hits"][0].get("judgmentDate") is None
 
 
 def test_query_dataset_saos_record_index_requires_page_id():

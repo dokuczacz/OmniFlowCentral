@@ -46,7 +46,7 @@ Both HTTP triggers are `authLevel: function`.
 ### Available Tools
 
 Primary dataset tool:
-- `query_dataset` (unified): `eli_acts`, `saos_judgments`
+- `query_dataset` (unified): `eli_acts`
   - Contract + examples: `docs/QUERY_DATASET.md`
 
 Discovery tool:

@@ -11,7 +11,7 @@ info:
     BEST PRACTICES:
     - Use query_dataset with fetch_content=true only after confirming pageId/recordIndex.
     - For large acts (kodeksy), use content_slice to request bounded excerpts.
-    - Available datasets: eli_acts (Polish legislation), saos_judgments (court decisions)
+    - Available dataset: eli_acts (Polish legislation)
 servers:
   - url: https://omniflowcentral-bagkbfera7d0hncc.switzerlandnorth-01.azurewebsites.net
 components:

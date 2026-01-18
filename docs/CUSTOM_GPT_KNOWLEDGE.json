@@ -1,6 +1,6 @@
 {
   "title": "OmniFlow Central - Custom GPT Knowledge (AGENT ONLY)",
-  "version": "2026-01-08",
+  "version": "2026-01-18",
   "scope": {
     "canonical": true,
     "allowed_tools": [
@@ -16,29 +16,25 @@
     ],
     "notes": [
       "This file is the single canonical guidance for Custom GPT tool usage.",
+      "Use only the GPT-only endpoints (/api/tools/gpt/*).",
       "Do not call blob helpers or manifest CRUD helpers."
     ]
   },
   "datasets": {
     "eli_acts": {
-      "description": "Polish legislation (Sejm) in JSONL index",
+      "description": "Polish legislation (ELI / Dz.U. / M.P.) in JSONL index",
       "dataset_id": "eli_acts"
-    },
-    "saos_judgments": {
-      "description": "Polish court judgments (SAOS) in JSONL index",
-      "dataset_id": "saos_judgments"
     }
   },
   "tools": {
     "query_dataset": {
-      "endpoint": "/api/tools/call",
+      "endpoint": "/api/tools/gpt/call",
       "tool_name": "query_dataset",
       "params": {
         "dataset": {
           "required": true,
           "enum": [
-            "eli_acts",
-            "saos_judgments"
+            "eli_acts"
           ]
         },
         "q": {
@@ -65,23 +61,31 @@
           "required": false,
           "type": "string"
         },
-        "court": {
-          "required": false,
-          "type": "string"
-        },
-        "court_type": {
-          "required": false,
-          "type": "string"
-        },
         "pageId": {
           "required": false,
           "type": "string",
-          "description": "Deterministic lookup key. eli_acts: ELI id like DU/2025/1882. saos_judgments: page id like page_00001."
+          "description": "Deterministic lookup key. ELI id like DU/2025/1882."
         },
         "recordIndex": {
           "required": false,
           "type": "integer",
-          "description": "Deterministic lookup key. eli_acts: pos. saos_judgments: index within page array (requires pageId)."
+          "description": "Deterministic lookup key. Act position (pos)."
+        },
+        "content_slice": {
+          "required": false,
+          "type": "object",
+          "description": "Optional excerpt control to stay under gateway limits.",
+          "properties": {
+            "start": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            }
+          }
         }
       },
       "filters_shape": "top_level_only",
@@ -90,23 +94,17 @@
           "year",
           "publisher",
           "status"
-        ],
-        "saos_judgments": [
-          "court",
-          "court_type",
-          "year"
         ]
       },
       "behavior": [
         "Reads the dataset index and returns matching hits.",
-        "When fetch_content=true: SAOS may return _fullContent (or _contentTruncated=true if too large).",
-        "When fetch_content=true: ELI may return _fullText (or _fullTextTruncated=true if too large) plus txt_missing/txt_status."
+        "When fetch_content=true: ELI may return _fullText or _fullTextExcerpt and may set *_Truncated flags when too large."
       ],
       "workflow": {
         "index_first": [
           "Candidate search: fetch_content=false to get IDs (pageId, recordIndex) + provenance.index_path.",
           "Confirm candidate: use pageId/recordIndex, not q, for deterministic matching.",
-          "Fetch content after confirmation (SAOS only)."
+          "Fetch bounded excerpt after confirmation (use content_slice)."
         ]
       },
       "q_syntax": {
@@ -117,11 +115,11 @@
         "notes": "Case-insensitive. No parentheses or quotes."
       },
       "truncation": {
-        "soft_cap_bytes_approx": 2000000,
+        "gateway_cap_bytes_approx": 2000000,
         "response_flag": "truncated",
         "record_flags": [
-          "_contentTruncated",
-          "_fullTextTruncated"
+          "_fullTextTruncated",
+          "_fullTextExcerptTruncated"
         ]
       },
       "provenance_fields": [
@@ -132,7 +130,7 @@
       ]
     },
     "dataset_search": {
-      "endpoint": "/api/tools/call",
+      "endpoint": "/api/tools/gpt/call",
       "tool_name": "dataset_search",
       "params": {
         "user_id": {
@@ -171,11 +169,14 @@
     {
       "tool": "query_dataset",
       "params": {
-        "dataset": "saos_judgments",
-        "q": "Amber Gold",
-        "limit": 5,
+        "dataset": "eli_acts",
+        "pageId": "DU/1997/553",
         "fetch_content": true,
-        "court_type": "common"
+        "limit": 1,
+        "content_slice": {
+          "start": 0,
+          "length": 12000
+        }
       }
     },
     {
@@ -207,3 +208,4 @@
     ]
   }
 }
+

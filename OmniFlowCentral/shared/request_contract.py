@@ -32,6 +32,13 @@ def parse_request(req) -> Dict[str, Any]:
     if not isinstance(body, dict):
         body = {}
 
+    # Some dispatchers (including certain Custom GPT Actions setups) may wrap
+    # the entire JSON payload under a top-level "params" object:
+    #   {"params": {"tool": "...", "params": {...}}}
+    # Normalize that into the expected root {"tool": "...", ...} shape.
+    if "tool" not in body and isinstance(body.get("params"), dict) and "tool" in body["params"]:
+        body = body["params"]
+
     tool = (params.get("tool") or body.get("tool") or "").strip()
 
     # The payload is the JSON body; keep it simple for now.

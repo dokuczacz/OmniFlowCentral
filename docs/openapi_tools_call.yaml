@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  title: OmniFlow Central GPT Tools
-  version: 0.3.0
+  title: OmniFlow Central GPT Tools (Minimal)
+  version: 0.4.0
   description: >-
-    OpenAPI schema for OmniFlow Central tools. Direct blob endpoints and unified
-    /api/tools/call dispatcher for advanced operations (list_blobs, read_blob, eli_acts_query, dataset_search, etc.).
-    
+    OpenAPI schema for OmniFlow Central Custom GPT tools.
+    This schema intentionally exposes only the GPT-only endpoints and only the dataset tools:
+    - query_dataset
+    - dataset_search
+
     BEST PRACTICES:
-    - Use query_dataset with fetch_content=true for dataset queries (replaces eli_acts_query)
-    - Always specify prefix when listing blobs to avoid timeouts
-    - Respect safety limits: read_blob 500KB, read_many 1.25MB total
+    - Use query_dataset with fetch_content=true only after confirming pageId/recordIndex.
+    - For large acts (kodeksy), use content_slice to request bounded excerpts.
     - Available datasets: eli_acts (Polish legislation), saos_judgments (court decisions)
 servers:
   - url: https://omniflowcentral-bagkbfera7d0hncc.switzerlandnorth-01.azurewebsites.net
@@ -50,17 +51,23 @@ components:
         - method
         - params
       additionalProperties: false
-    GenericResponse:
+    ToolCallRequest:
       type: object
+      description: GPT-only dispatcher request.
       properties:
-        status:
+        tool:
           type: string
-          enum: [success, error]
-        result:
+          enum: [query_dataset, dataset_search]
+        user_id:
+          type: string
+          description: Optional user scope (defaults to `public` on the GPT endpoint).
+        params:
           type: object
+          description: Tool parameters (preferred shape).
           additionalProperties: true
       required:
-        - status
+        - tool
+      additionalProperties: false
     ToolCallResponse:
       type: object
       properties:
@@ -80,276 +87,18 @@ components:
         result:
           type: object
           additionalProperties: true
-          description: Tool-specific result payload
       required:
         - status
         - tool
         - user_id
-            - blob
-          additionalProperties: false
-        code:
-          type: string
-        message:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
-      required:
-        - status
-        - user_id
-      additionalProperties: false
-    ErrorDetails:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [error]
-        code:
-          type: string
-          description: Error code (MISSING_PARAM, INVALID_TOOL, UPSTREAM_ERROR, etc.)
-        message:
-          type: string
-        details:
-          type: object
-          additionalProperties: true
-        tool:
-          type: string
-        user_id:
-          type: string
-      required:
-        - status
-        - code
-        - message
-        - tool
-        - user_id
-    ListBlobsRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [list_blobs]
-        prefix:
-          type: string
-          description: Optional blob name prefix filter (e.g., "datasets/eli/metadata").
-        max_results:
-          type: integer
-          description: Max results (1-1000, default 200).
-          minimum: 1
-          maximum: 1000
-        timeout_seconds:
-          type: integer
-          description: Timeout in seconds (1-60, default 10).
-          minimum: 1
-          maximum: 60
-      required:
-        - tool
-    EliActsQueryRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [eli_acts_query]
-        q:
-          type: string
-          description: Search query by act title (e.g., "Prawo budowlane").
-        year:
-          type: integer
-          description: Optional filter by publication year.
-        publisher:
-          type: string
-          description: Optional filter by publisher name (e.g., "Sejm RP").
-        status:
-          type: string
-          description: Optional filter by status (e.g., "active", "repealed").
-        limit:
-          type: integer
-          description: Max results (1-50, default 10).
-          minimum: 1
-          maximum: 50
-      required:
-        - tool
-      examples:
-        - tool: eli_acts_query
-          q: Prawo budowlane
-          limit: 5
-    DatasetSearchRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [dataset_search]
-        q:
-          type: string
-          description: Optional search query.
-        tags_any:
-          type: array
-          items:
-            type: string
-          description: Optional array of tags (any match).
-        category:
-          type: string
-          description: Optional category filter.
-        limit:
-          type: integer
-          description: Max results (default 20, max 100).
-          minimum: 1
-          maximum: 100
-      required:
-        - tool
-    ReadBlobRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [read_blob]
-        name:
-          type: string
-          description: Blob name to read (relative path).
-      required:
-        - tool
-        - name
-    ReadManyBlobsRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [read_many_blobs]
-        files:
-          type: array
-          items:
-            type: string
-          description: List of blob names to read.
-        max_files:
-          type: integer
-          description: Max files to process (default 25).
-        parse_json:
-          type: boolean
-          description: Parse JSON files (default true).
-        tail_lines:
-          type: integer
-          description: Tail lines (0 = all, default 0).
-        tail_bytes:
-          type: integer
-          description: Tail bytes (0 = all, default 65536).
-      required:
-        - tool
-        - files
-    GetFilteredDataRequest:
-      type: object
-      properties:
-        tool:
-          type: string
-          enum: [get_filtered_data]
-        target_blob_name:
-          type: string
-          description: Blob to query (file_name also accepted).
-        filter_key:
-          type: string
-          description: Key to filter by.
-        filter_value:
-          type: string
-          description: Value to match.
-      required:
-        - tool
-        - target_blob_name
-    ToolCallRequest:
-      type: object
-      description: Unified dispatcher request for dataset search. Custom GPT agents should only invoke `query_dataset` (and optionally `dataset_search` for manifest exploration); other tools remain internal.
-      properties:
-        tool:
-          type: string
-          enum: [query_dataset, dataset_search]
-        user_id:
-          type: string
-          description: Optional user scope (defaults to `default` when omitted).
-        dataset:
-          type: string
-          description: Dataset name (e.g., `eli_acts`, `saos_judgments`).
-        q:
-          type: string
-          description: Query string (case-insensitive match across indexed metadata).
-        fetch_content:
-          type: boolean
-          description: Request the full document payload for each match.
-        limit:
-          type: integer
-          minimum: 1
-          maximum: 100
-          description: Maximum number of entries to return.
-        year:
-          type: integer
-          description: Year filter (ELI acts).
-        publisher:
-          type: string
-          description: Publisher filter (ELI).
-        status:
-          type: string
-          description: Status filter (ELI and SAOS).
-        court:
-          type: string
-          description: Court name filter (SAOS).
-        court_type:
-          type: string
-          description: Court type filter (SAOS).
-        pageId:
-          type: string
-          description: >-
-            Deterministic index lookup key. For eli_acts this is the ELI id (e.g. "DU/2025/1882").
-            For saos_judgments this is the page blob id (e.g. "page_00001"). When used with recordIndex,
-            allows precise index→fetch workflows without relying on text search.
-        recordIndex:
-          type: integer
-          description: >-
-            Deterministic index lookup key. For eli_acts this is the act position (`pos`).
-            For saos_judgments this is the index within the page array and requires pageId.
-        content_slice:
-          type: object
-          description: >-
-            Optional excerpt control when `fetch_content=true`. Defaults to `start=0`, `length=2048`
-            and obeys the 2 MB response cap.
-          properties:
-            start:
-              type: integer
-              minimum: 0
-            length:
-              type: integer
-              minimum: 1
-              maximum: 4096
-          additionalProperties: false
-        tags_any:
-          type: array
-          items:
-            type: string
-          description: Tags filter (any match, dataset_search).
-        tags_all:
-          type: array
-          items:
-            type: string
-          description: Tags filter (all match, dataset_search).
-        category:
-          type: string
-          description: Category filter (dataset_search).
-        since:
-          type: string
-          format: date-time
-          description: ISO 8601 lower bound for `updated_at`.
-        until:
-          type: string
-          format: date-time
-          description: ISO 8601 upper bound for `updated_at`.
-        cursor:
-          type: string
-          description: Cursor token for pagination (`updated_at|blob_name`).
-      required:
-        - tool
-      additionalProperties: false
+      additionalProperties: true
 security:
   - functionKey: []
 paths:
-  /api/tools/capabilities:
+  /api/tools/gpt/capabilities:
     get:
       operationId: get_capabilities
-      summary: List available tools and their parameters.
+      summary: List available GPT tools and their parameters.
       security:
         - functionKey: []
       responses:
@@ -361,99 +110,10 @@ paths:
                 $ref: '#/components/schemas/CapabilitiesResponse'
         '401':
           description: Missing or invalid function key. Ensure x-functions-key header is set.
-  /api/list_blobs:
-    get:
-      operationId: list_blobs_get
-      summary: List blobs in the container with optional prefix filter.
-      security:
-        - functionKey: []
-      parameters:
-        - name: prefix
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Optional path prefix to filter blobs (e.g., "datasets/eli/metadata").
-        - name: max_results
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 1000
-            default: 200
-          description: Maximum number of results to return (caps at 1000).
-        - name: timeout_seconds
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 60
-            default: 10
-          description: Request timeout in seconds (max 60).
-      responses:
-        '200':
-          description: Blobs listed successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericResponse'
-              examples:
-                ok:
-                  value:
-                    status: success
-                    result:
-                      items:
-                        - name: datasets/eli/metadata/institutions.json
-                          size: 2048
-                          last_modified: '2026-01-07T10:30:00Z'
-                        - name: datasets/eli/metadata/keywords.json
-                          size: 71680
-                          last_modified: '2026-01-07T10:35:00Z'
-        '400':
-          description: Bad request (e.g., invalid parameters).
-        '401':
-          description: Missing or invalid function key.
-  /api/read_blob_file:
-    get:
-      operationId: read_blob_get
-      summary: Read a blob by name.
-      security:
-        - functionKey: []
-      parameters:
-        - name: file_name
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Blob name to read (relative path, e.g., "datasets/eli/metadata/institutions.json").
-      responses:
-        '200':
-          description: Blob read successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericResponse'
-              examples:
-                json_example:
-                  value:
-                    status: success
-                    result:
-                      content: '{"institution_id": 1, "name": "Supreme Court"}'
-        '400':
-          description: Bad request (missing file_name).
-        '401':
-          description: Missing or invalid function key.
-        '404':
-          description: Blob not found.
-  /api/tools/call:
+  /api/tools/gpt/call:
     post:
-      operationId: tools_call
-      summary: >-
-        Unified dispatcher for the dataset search helpers (`query_dataset` and `dataset_search`).
-
-        Note: Parameters may be supplied at the root level or inside a `params` object. Legacy helpers (list_blobs, read_blob, etc.) exist for diagnostics but are not required for Custom GPT.
+      operationId: tools_call_gpt
+      summary: Call a supported tool via the GPT-only dispatcher.
       security:
         - functionKey: []
       requestBody:
@@ -463,114 +123,41 @@ paths:
             schema:
               $ref: '#/components/schemas/ToolCallRequest'
             examples:
-              query_dataset_eli:
+              query_dataset_eli_confirm:
                 value:
                   tool: query_dataset
-                  dataset: eli_acts
-                  q: Prawo budowlane
-                  limit: 5
-                  fetch_content: true
-              query_dataset_saos:
+                  params:
+                    dataset: eli_acts
+                    pageId: DU/1997/553
+                    fetch_content: false
+                    limit: 1
+              query_dataset_eli_excerpt:
                 value:
                   tool: query_dataset
-                  dataset: saos_judgments
-                  q: Amber Gold
-                  court: Gdańsk
-                  limit: 10
-                  fetch_content: true
-              eli_acts_query_legacy:
-                summary: "Legacy (deprecated - use query_dataset instead)"
-                value:
-                  tool: eli_acts_query
-                  q: Prawo budowlane
-                  limit: 5
+                  params:
+                    dataset: eli_acts
+                    pageId: DU/1997/553
+                    fetch_content: true
+                    limit: 1
+                    content_slice:
+                      start: 0
+                      length: 12000
               dataset_search:
                 value:
                   tool: dataset_search
-                  q: test
-                  tags_any:
-                    - project-x
-                  limit: 10
-              list_blobs:
-                value:
-                  tool: list_blobs
-                  prefix: datasets/eli/metadata
-                  max_results: 10
-                  timeout_seconds: 30
+                  user_id: public
+                  params:
+                    category: dataset
+                    tags_any: [legal]
+                    limit: 20
       responses:
         '200':
-          description: Tool executed successfully.
+          description: Tool response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ToolCallResponse'
-              examples:
-                eli_acts:
-                  value:
-                    status: success
-                    tool: eli_acts_query
-                    user_id: default
-                    result:
-                      items:
-                        - eli: Dz.U. 1994 nr 89 poz. 414
-                          title: Prawo budowlane
-                          year: 1994
-                          status: active
-                          publisher: Sejm RP
-                query_dataset_truncated:
-                  value:
-                    status: success
-                    tool: query_dataset
-                    user_id: default
-                    result:
-                      status: success
-                      dataset: saos_judgments
-                      total_scanned: 20000
-                      total_returned: 2
-                      limit: 10
-                      fetch_content: true
-                      truncated: true
-                      warning: Response truncated to soft cap.
-                      hits:
-                        - caseNumber: II K 38/16
-                          court: Sad Okregowy w Gdansku
-                          courtType: COMMON
-                          judgmentDate: '2017-05-15'
-                          summary: Amber Gold - oszustwo...
-                          pageId: page_00042
-                          recordIndex: 17
-                          _contentTruncated: true
-                      provenance:
-                        index_path: users/public/datasets/saos/judgments/index/judgments_index.jsonl
-                list_blobs:
-                  value:
-                    status: success
-                    tool: list_blobs
-                    user_id: default
-                    result:
-                      items:
-                        - name: datasets/eli/metadata/institutions.json
-                          size: 2048
-                          last_modified: '2026-01-07T10:30:00Z'
         '400':
-          description: Bad request (missing/invalid tool or params).
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorDetails'
-              examples:
-                missing_tool:
-                  value:
-                    status: error
-                    code: MISSING_PARAM
-                    message: "Missing 'tool' parameter."
-                    tool: ''
-                    user_id: default
+          description: Bad request (invalid tool or params).
         '401':
           description: Missing or invalid function key.
-        '502':
-          description: Upstream error (e.g., storage connection failed).        
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorDetails'

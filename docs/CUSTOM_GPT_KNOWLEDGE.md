@@ -5,7 +5,7 @@ STRICT RULES:
 - Forbidden tools: `read_blob`, `read_many_blobs`, `get_filtered_data`, `eli_acts_query`, any manifest CRUD helpers
 
 CALL SHAPE (REQUIRED):
-Always call tools via `/api/tools/call` using:
+Always call tools via `/api/tools/gpt/call` using:
 ```json
 {
   "tool": "<query_dataset|dataset_search>",

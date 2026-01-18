@@ -28,7 +28,7 @@ TOOL_SPECS = {
         },
     },
     "read_blob": {
-        "description": "Read a blob inside the user's namespace, returning JSON or text.",
+        "description": "Read a blob inside the user's namespace, returning JSON or text (parameter `name` with aliases `file_name`).",
         "method": "POST",
         "params": {
             "name": "string (relative blob path)",
@@ -149,6 +149,7 @@ TOOL_SPECS = {
             "court_type": "optional string (SAOS: filter by court type)",
             "pageId": "optional string (ELI: ELI id like DU/2025/1882; SAOS: page blob id like page_00001)",
             "recordIndex": "optional int (ELI: pos; SAOS: index within page array; requires pageId for SAOS)",
+            "content_slice": "optional object {start:int, length:int} to request a bounded excerpt (defaults 0/2048 bytes, respects 2 MB cap)",
         },
     },
 }

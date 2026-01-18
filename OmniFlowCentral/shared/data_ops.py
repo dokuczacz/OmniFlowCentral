@@ -586,11 +586,17 @@ def dataset_search(user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
 # Dataset index registry: maps dataset names to index blob paths
 DATASET_INDEX_REGISTRY = {
-    "eli_acts": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",    
+    "eli_acts": "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl",
     "saos_judgments": "users/public/datasets/saos/judgments/index/judgments_index.jsonl",
+    "tk_judgments": "users/public/datasets/tk_judgments/index/judgments.jsonl",
+    "sn_judgments": "users/public/datasets/sn_judgments/index/judgments.jsonl",
+    "nsa_judgments": "users/public/datasets/nsa_judgments/index/judgments.jsonl",
+    "eli_case_links": "users/public/datasets/eli_case_links/index/eli_to_judgments.jsonl",
 }
 
 QUERY_DATASET_CONTENT_SOFT_CAP = 200 * 1024
+CONTENT_SLICE_DEFAULT_LENGTH = 2048
+CONTENT_SLICE_MAX_LENGTH = 4096
 
 
 def _estimate_json_bytes(value: Any) -> int:
@@ -602,6 +608,30 @@ def _estimate_json_bytes(value: Any) -> int:
         )
     except Exception:
         return 0
+
+
+def _apply_content_slice(raw: bytes, slice_spec: Dict[str, int]) -> tuple[bytes, bool, int]:
+    start = slice_spec.get("start", 0)
+    start = max(0, min(start, len(raw)))
+    if start >= len(raw):
+        return b"", False, start
+
+    length = slice_spec.get("length", CONTENT_SLICE_DEFAULT_LENGTH)
+    length = max(
+        1,
+        min(length, CONTENT_SLICE_MAX_LENGTH, len(raw) - start),
+    )
+    end = min(start + length, len(raw))
+    excerpt = raw[start:end]
+    truncated = end < len(raw)
+    return excerpt, truncated, start
+
+
+def _parse_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _apply_response_soft_cap(response: Dict[str, Any]) -> Dict[str, Any]:
@@ -629,6 +659,18 @@ def _apply_response_soft_cap(response: Dict[str, Any]) -> Dict[str, Any]:
     response["hits"] = hits
     response["total_returned"] = len(hits)
     return response
+
+
+def _normalize_content_slice(params: Dict[str, Any]) -> Optional[Dict[str, int]]:
+    raw = params.get("content_slice") or params.get("contentSlice")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ToolError("VALIDATION_FAILED", "Parameter 'content_slice' must be an object.")
+    start = max(0, _parse_int(raw.get("start"), 0))
+    length = _parse_int(raw.get("length"), CONTENT_SLICE_DEFAULT_LENGTH)
+    length = max(1, min(length, CONTENT_SLICE_MAX_LENGTH))
+    return {"start": start, "length": length}
 
 
 def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -691,7 +733,14 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
             "VALIDATION_FAILED",
             "Parameter 'recordIndex' requires 'pageId' for saos_judgments lookups.",
         )
-    
+
+    content_slice = _normalize_content_slice(params)
+    if content_slice and dataset_name != "eli_acts":
+        raise ToolError(
+            "VALIDATION_FAILED",
+            "Parameter 'content_slice' is supported only for dataset 'eli_acts'.",
+        )
+
     # Read the NDJSON index
     container_client = _connect_container()
     
@@ -762,7 +811,12 @@ def query_dataset(params: Dict[str, Any]) -> Dict[str, Any]:
     
     # Optionally fetch full content for matched records
     if fetch_content:
-        results = _attach_full_content(results, container_client, dataset_name)
+        results = _attach_full_content(
+            results,
+            container_client,
+            dataset_name,
+            content_slice=content_slice,
+        )
         response_warning = None
     else:
         response_warning = None
@@ -809,11 +863,55 @@ def _matches_filters(record: Dict, params: Dict, dataset_name: str) -> bool:
         court = str(params.get("court") or "").strip().lower()
         if court and court not in record.get("court", "").lower():
             return False
-        
+
         court_type = str(params.get("court_type") or "").strip().lower()
         if court_type and court_type != record.get("courtType", "").lower():
             return False
-    
+
+    elif dataset_name in ("tk_judgments", "sn_judgments", "nsa_judgments"):
+        court = str(params.get("court") or "").strip().lower()
+        if court and court not in str(record.get("court") or "").lower():
+            return False
+
+        case_number = params.get("case_number")
+        if case_number in ("", None):
+            case_number = params.get("caseNumber")
+        if case_number:
+            if str(case_number).strip().lower() not in str(record.get("caseNumber") or "").lower():
+                return False
+
+        eli_page_id = params.get("eli_pageId")
+        if eli_page_id in ("", None):
+            eli_page_id = params.get("eli_pageid")
+        if eli_page_id:
+            target = str(eli_page_id).strip()
+            links = record.get("eli_links") or []
+            if target not in links:
+                return False
+
+        # Optional date window filters (best-effort; some sources may not include dates).
+        since = params.get("since")
+        until = params.get("until")
+        jd = str(record.get("judgmentDate") or "").strip()
+        if (since or until) and jd:
+            try:
+                jd_date = datetime.fromisoformat(jd[:10])
+                if since:
+                    if jd_date < datetime.fromisoformat(str(since)[:10]):
+                        return False
+                if until:
+                    if jd_date > datetime.fromisoformat(str(until)[:10]):
+                        return False
+            except Exception:
+                # If parsing fails, keep the record (deterministic over guessing).
+                pass
+
+    elif dataset_name == "eli_case_links":
+        # Allow optional filtering by ELI pageId.
+        eli_page_id = params.get("eli_pageId")
+        if eli_page_id and str(record.get("eli_pageId") or "").strip() != str(eli_page_id).strip():
+            return False
+
     return True
 
 
@@ -903,6 +1001,41 @@ def _text_search_match(record: Dict, query: str, dataset_name: str) -> bool:
             return all(term in searchable for term in terms)
         return bool(terms) and terms[0] in searchable
 
+    elif dataset_name in ("tk_judgments", "sn_judgments", "nsa_judgments"):
+        searchable = _normalize_text(
+            " ".join(
+                [
+                    str(record.get("title") or ""),
+                    str(record.get("summary") or ""),
+                    str(record.get("caseNumber") or ""),
+                    str(record.get("court") or ""),
+                    " ".join(record.get("eli_links") or []),
+                ]
+            )
+        )
+        mode, terms = _normalize_boolean_query(query)
+        if mode == "or":
+            return any(term in searchable for term in terms)
+        if mode == "and":
+            return all(term in searchable for term in terms)
+        return bool(terms) and terms[0] in searchable
+
+    elif dataset_name == "eli_case_links":
+        searchable = _normalize_text(
+            " ".join(
+                [
+                    str(record.get("eli_pageId") or ""),
+                    json.dumps(record.get("judgments") or [], ensure_ascii=False),
+                ]
+            )
+        )
+        mode, terms = _normalize_boolean_query(query)
+        if mode == "or":
+            return any(term in searchable for term in terms)
+        if mode == "and":
+            return all(term in searchable for term in terms)
+        return bool(terms) and terms[0] in searchable
+
     return False
 
 
@@ -911,6 +1044,7 @@ def _attach_full_content(
     container_client,
     dataset_name: str,
     max_content_bytes: int = QUERY_DATASET_CONTENT_SOFT_CAP,
+    content_slice: Optional[Dict[str, int]] = None,
 ) -> List[Dict]:
     """Fetch and attach full blob content for each matched record."""
     enriched = []
@@ -939,10 +1073,28 @@ def _attach_full_content(
                 text = raw.decode("utf-8", "replace")
                 record["txt_missing"] = False
                 record["txt_status"] = "skipped" if text.lstrip().startswith("[SKIPPED]") else "ok"
-                if max_content_bytes and len(raw) > max_content_bytes:
-                    record["_fullTextTruncated"] = True
+                if content_slice:
+                    excerpt_bytes, excerpt_truncated, excerpt_start = _apply_content_slice(
+                        raw, content_slice
+                    )
+                    excerpt_text = excerpt_bytes.decode("utf-8", "replace")
+                    record["_fullTextExcerpt"] = excerpt_text
+                    record["_fullTextExcerptStart"] = excerpt_start
+                    record["_fullTextExcerptLength"] = len(excerpt_bytes)
+                    record["_fullTextExcerptTruncated"] = excerpt_truncated
+                    truncated_by_size = bool(
+                        max_content_bytes and len(raw) > max_content_bytes
+                    )
+                    if not excerpt_truncated and excerpt_start == 0 and (
+                        not truncated_by_size or len(excerpt_bytes) == len(raw)
+                    ):
+                        record["_fullText"] = excerpt_text
+                    record["_fullTextTruncated"] = excerpt_truncated or truncated_by_size
                 else:
-                    record["_fullText"] = text
+                    if max_content_bytes and len(raw) > max_content_bytes:
+                        record["_fullTextTruncated"] = True
+                    else:
+                        record["_fullText"] = text
             except ResourceNotFoundError:
                 record["txt_missing"] = True
                 record["txt_status"] = "skipped"
@@ -977,9 +1129,50 @@ def _attach_full_content(
             except Exception as e:
                 logging.warning(f"Could not fetch content for {blob_path}: {e}")
                 record["_contentError"] = str(e)
-        
+
+        elif dataset_name in ("tk_judgments", "sn_judgments", "nsa_judgments"):
+            # JudgmentNorm.v1 datasets: attach normalized JSON + optionally plaintext.
+            detail_path = str(record.get("detail_path") or "").strip()
+            text_path = str(record.get("text_path") or "").strip()
+
+            base_prefix = _base_prefix_from_index(dataset_name, f"users/public/datasets/{dataset_name}")
+            if detail_path and "/" not in detail_path[:4] and not detail_path.startswith("users/"):
+                detail_path = f"{base_prefix}/{detail_path.lstrip('/')}"
+            if text_path and "/" not in text_path[:4] and not text_path.startswith("users/"):
+                text_path = f"{base_prefix}/{text_path.lstrip('/')}"
+
+            try:
+                if detail_path:
+                    blob_client = container_client.get_blob_client(detail_path)
+                    raw = blob_client.download_blob().readall()
+                    norm = json.loads(raw.decode("utf-8", "replace"))
+                    content_size = _estimate_json_bytes(norm)
+                    if max_content_bytes and content_size > max_content_bytes:
+                        record["_contentTruncated"] = True
+                    else:
+                        record["_fullContent"] = norm
+            except Exception as e:
+                logging.warning(f"Could not fetch judgment norm for {detail_path}: {e}")
+                record["_contentError"] = str(e)
+
+            try:
+                if text_path:
+                    blob_client = container_client.get_blob_client(text_path)
+                    raw = blob_client.download_blob().readall()
+                    text = raw.decode("utf-8", "replace")
+                    if max_content_bytes and len(raw) > max_content_bytes:
+                        record["_fullTextTruncated"] = True
+                    else:
+                        record["_fullText"] = text
+            except ResourceNotFoundError:
+                record["_textMissing"] = True
+            except Exception as e:
+                logging.warning(f"Could not fetch judgment text for {text_path}: {e}")
+                record["_textMissing"] = True
+                record["_textError"] = str(e)
+
         enriched.append(record)
-    
+
     return enriched
 
 

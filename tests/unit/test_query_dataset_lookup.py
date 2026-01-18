@@ -228,3 +228,45 @@ def test_query_dataset_saos_record_index_requires_page_id():
     with pytest.raises(ToolError) as exc:
         query_dataset({"dataset": "saos_judgments", "recordIndex": 0})
     assert exc.value.code == "VALIDATION_FAILED"
+
+
+def test_query_dataset_eli_content_slice_returns_excerpt():
+    index_path = "users/public/datasets/eli_acts/index/acts_inforce_1.jsonl"
+    line = json.dumps(
+        {
+            "ELI": "DU/2025/1882",
+            "pageId": "DU/2025/1882",
+            "publisher": "DU",
+            "year": 2025,
+            "pos": 1882,
+            "title": "Excerpt act",
+            "status": "obowiązujący",
+        },
+        ensure_ascii=False,
+    )
+    text_payload = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".encode("utf-8")
+    text_path = "users/public/datasets/eli_acts/text/DU/2025/1882.txt"
+    blobs = {
+        index_path: (line + "\n").encode("utf-8"),
+        text_path: text_payload,
+    }
+
+    with patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs)):
+        resp = query_dataset(
+            {
+                "dataset": "eli_acts",
+                "pageId": "DU/2025/1882",
+                "fetch_content": True,
+                "limit": 1,
+                "content_slice": {"start": 5, "length": 10},
+            }
+        )
+
+    assert resp["status"] == "success"
+    assert resp["total_returned"] == 1
+    hit = resp["hits"][0]
+    assert hit["_fullTextExcerpt"] == "56789ABCDE"
+    assert hit["_fullTextExcerptStart"] == 5
+    assert hit["_fullTextExcerptLength"] == 10
+    assert hit["_fullTextTruncated"] is True
+    assert "_fullText" not in hit

@@ -302,6 +302,20 @@ components:
           description: >-
             Deterministic index lookup key. For eli_acts this is the act position (`pos`).
             For saos_judgments this is the index within the page array and requires pageId.
+        content_slice:
+          type: object
+          description: >-
+            Optional excerpt control when `fetch_content=true`. Defaults to `start=0`, `length=2048`
+            and obeys the 2 MB response cap.
+          properties:
+            start:
+              type: integer
+              minimum: 0
+            length:
+              type: integer
+              minimum: 1
+              maximum: 4096
+          additionalProperties: false
         tags_any:
           type: array
           items:

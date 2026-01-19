@@ -83,13 +83,13 @@ components:
           description: When true, fetches act text excerpt (bounded) after confirmation.
         year:
           type: integer
-          description: Optional filter: publication year of the act.
+          description: "Optional filter: publication year of the act."
         publisher:
           type: string
-          description: Optional filter: publisher (DU/MP).
+          description: "Optional filter: publisher (DU/MP)."
         status:
           type: string
-          description: Optional filter: status of the act.
+          description: "Optional filter: status of the act."
         pageId:
           type: string
           description: Deterministic ELI id like "DU/1997/553" or "MP/2025/123".
@@ -112,7 +112,7 @@ components:
         # dataset_search fields (manifest discovery)
         category:
           type: string
-          description: Optional manifest category (recommended: dataset).
+          description: "Optional manifest category (recommended: dataset)."
         tags_any:
           type: array
           items:

@@ -175,7 +175,7 @@
         "limit": 1,
         "content_slice": {
           "start": 0,
-          "length": 12000
+          "length": 4096
         }
       }
     },
@@ -208,4 +208,3 @@
     ]
   }
 }
-

@@ -102,12 +102,11 @@ CITATIONS (REQUIRED IN ANSWERS):
        "dataset": "eli_acts",
        "pageId": "DU/1997/553",
        "fetch_content": true,
-       "content_slice": {"start": 0, "length": 12000}
+       "content_slice": {"start": 0, "length": 4096}
      }
    }
    ```
 3. If the gateway rejects the response size, do not retry with the same request. Instead:
-   - Shorten `content_slice.length` to 8–16 KB until `_fullTextExcerpt` is returned without errors.
-   - Ask the user for the exact article number and narrow the slice to that section.
+   - Keep `content_slice.length` at <= 4096 bytes and move the `start` offset to page through the text safely.
+   - Ask the user for the exact article number and narrow the slice to that section (or use multiple slices for adjacent context).
 4. Maintain a local mirror for critical acts: upload `users/public/datasets/eli_acts/text/DU/1997/553.txt` so fetches never hit the remote API.
-

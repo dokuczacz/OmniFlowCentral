@@ -88,7 +88,7 @@ When enabled, backend tries to attach:
     "pageId": "DU/1997/553",
     "fetch_content": true,
     "limit": 1,
-    "content_slice": {"start": 0, "length": 12000}
+    "content_slice": {"start": 0, "length": 4096}
   }
 }
 ```
@@ -109,4 +109,3 @@ To reduce false negatives in natural language prompts, normalize these in your q
 - "dz ust" → `DU`
 - "M.P." / "Monitor Polski" → `MP`
 - "poz." → `pos` (but prefer `pageId` when you know it)
-

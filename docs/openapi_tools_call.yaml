@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OmniFlow Central GPT Tools (Minimal)
-  version: 0.4.0
+  version: 0.5.0
   description: >-
     OpenAPI schema for OmniFlow Central Custom GPT tools.
     This schema intentionally exposes only the GPT-only endpoints and only the dataset tools:
@@ -53,7 +53,10 @@ components:
       additionalProperties: false
     ToolCallRequest:
       type: object
-      description: GPT-only dispatcher request.
+      description: >-
+        GPT-only dispatcher request (flattened shape for maximum Custom GPT Actions compatibility).
+        Note: OmniFlow backend also accepts a nested `params` object, but this OpenAPI intentionally
+        uses the flattened shape because some Action dispatchers treat `params` as kwargs.
       properties:
         tool:
           type: string
@@ -61,10 +64,68 @@ components:
         user_id:
           type: string
           description: Optional user scope (defaults to `public` on the GPT endpoint).
-        params:
+
+        # query_dataset fields (ELI only)
+        dataset:
+          type: string
+          enum: [eli_acts]
+          description: Dataset name (required when tool=query_dataset).
+        q:
+          type: string
+          description: Optional text query (literal substring match across indexed metadata).
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Maximum number of entries to return.
+        fetch_content:
+          type: boolean
+          description: When true, fetches act text excerpt (bounded) after confirmation.
+        year:
+          type: integer
+          description: Optional filter: publication year of the act.
+        publisher:
+          type: string
+          description: Optional filter: publisher (DU/MP).
+        status:
+          type: string
+          description: Optional filter: status of the act.
+        pageId:
+          type: string
+          description: Deterministic ELI id like "DU/1997/553" or "MP/2025/123".
+        recordIndex:
+          type: integer
+          description: Deterministic index for ELI acts (`pos`).
+        content_slice:
           type: object
-          description: Tool parameters (preferred shape).
-          additionalProperties: true
+          description: Optional excerpt control when fetch_content=true (defaults to start=0, length=2048; max length 4096).
+          properties:
+            start:
+              type: integer
+              minimum: 0
+            length:
+              type: integer
+              minimum: 1
+              maximum: 4096
+          additionalProperties: false
+
+        # dataset_search fields (manifest discovery)
+        category:
+          type: string
+          description: Optional manifest category (recommended: dataset).
+        tags_any:
+          type: array
+          items:
+            type: string
+          description: Optional tags filter (any match).
+        tags_all:
+          type: array
+          items:
+            type: string
+          description: Optional tags filter (all match).
+        cursor:
+          type: string
+          description: Optional cursor token for pagination.
       required:
         - tool
       additionalProperties: false
@@ -126,30 +187,27 @@ paths:
               query_dataset_eli_confirm:
                 value:
                   tool: query_dataset
-                  params:
-                    dataset: eli_acts
-                    pageId: DU/1997/553
-                    fetch_content: false
-                    limit: 1
+                  dataset: eli_acts
+                  pageId: DU/1997/553
+                  fetch_content: false
+                  limit: 1
               query_dataset_eli_excerpt:
                 value:
                   tool: query_dataset
-                  params:
-                    dataset: eli_acts
-                    pageId: DU/1997/553
-                    fetch_content: true
-                    limit: 1
-                    content_slice:
-                      start: 0
-                      length: 12000
+                  dataset: eli_acts
+                  pageId: DU/1997/553
+                  fetch_content: true
+                  limit: 1
+                  content_slice:
+                    start: 0
+                    length: 4096
               dataset_search:
                 value:
                   tool: dataset_search
                   user_id: public
-                  params:
-                    category: dataset
-                    tags_any: [legal]
-                    limit: 20
+                  category: dataset
+                  tags_any: [legal]
+                  limit: 20
       responses:
         '200':
           description: Tool response

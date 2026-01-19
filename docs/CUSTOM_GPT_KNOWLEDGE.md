@@ -9,18 +9,18 @@ Always call tools via `/api/tools/gpt/call` using:
 ```json
 {
   "tool": "<query_dataset|dataset_search>",
-  "params": { }
+  "...": "tool fields at root (do NOT wrap in a top-level params object)"
 }
 ```
 
 query_dataset
-- `params.dataset` (required): `eli_acts`
-- `params.q` (optional): string
-- `params.limit` (optional): int (1..100)
-- `params.fetch_content` (optional): bool
-- `params.pageId` (optional): deterministic lookup key
+- `dataset` (required): `eli_acts`
+- `q` (optional): string
+- `limit` (optional): int (1..100)
+- `fetch_content` (optional): bool
+- `pageId` (optional): deterministic lookup key
   - `eli_acts`: ELI id like `DU/2025/1882`
-- `params.recordIndex` (optional): deterministic lookup key
+- `recordIndex` (optional): deterministic lookup key
   - `eli_acts`: `pos`
 - Filters MUST be top-level keys inside `params` (DO NOT send `filters={...}`)
   - `eli_acts`: `year`, `publisher`, `status`
@@ -43,30 +43,26 @@ Example (ELI deterministic fetch by ELI id):
 ```json
 {
   "tool": "query_dataset",
-  "params": {
-    "dataset": "eli_acts",
-    "pageId": "DU/2025/1882",
-    "fetch_content": false
-  }
+  "dataset": "eli_acts",
+  "pageId": "DU/2025/1882",
+  "fetch_content": false
 }
 ```
 
 dataset_search
 - Use only to discover dataset entries in the manifest (category/tags/cursor).
 - Recommended:
-  - `params.user_id`: `public`
-  - `params.category`: `dataset`
+  - `user_id`: `public`
+  - `category`: `dataset`
 
 Example:
 ```json
 {
   "tool": "dataset_search",
-  "params": {
-    "user_id": "public",
-    "category": "dataset",
-    "tags_any": ["legal"],
-    "limit": 20
-  }
+  "user_id": "public",
+  "category": "dataset",
+  "tags_any": ["legal"],
+  "limit": 20
 }
 ```
 
@@ -98,12 +94,10 @@ CITATIONS (REQUIRED IN ANSWERS):
    ```json
    {
      "tool": "query_dataset",
-     "params": {
-       "dataset": "eli_acts",
-       "pageId": "DU/1997/553",
-       "fetch_content": true,
-       "content_slice": {"start": 0, "length": 4096}
-     }
+     "dataset": "eli_acts",
+     "pageId": "DU/1997/553",
+     "fetch_content": true,
+     "content_slice": {"start": 0, "length": 4096}
    }
    ```
 3. If the gateway rejects the response size, do not retry with the same request. Instead:

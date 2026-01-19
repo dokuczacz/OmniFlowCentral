@@ -88,6 +88,7 @@
           }
         }
       },
+      "request_shape": "Send query_dataset fields at the root JSON level: {tool, dataset, q, limit, fetch_content, ...}. Avoid wrapping them in a top-level params object because some Custom GPT dispatchers treat params as kwargs.",
       "filters_shape": "top_level_only",
       "filters": {
         "eli_acts": [
@@ -168,35 +169,29 @@
   "examples": [
     {
       "tool": "query_dataset",
-      "params": {
-        "dataset": "eli_acts",
-        "pageId": "DU/1997/553",
-        "fetch_content": true,
-        "limit": 1,
-        "content_slice": {
-          "start": 0,
-          "length": 4096
-        }
+      "dataset": "eli_acts",
+      "pageId": "DU/1997/553",
+      "fetch_content": true,
+      "limit": 1,
+      "content_slice": {
+        "start": 0,
+        "length": 4096
       }
     },
     {
       "tool": "query_dataset",
-      "params": {
-        "dataset": "eli_acts",
-        "pageId": "DU/2025/1882",
-        "fetch_content": false
-      }
+      "dataset": "eli_acts",
+      "pageId": "DU/2025/1882",
+      "fetch_content": false
     },
     {
       "tool": "dataset_search",
-      "params": {
-        "user_id": "public",
-        "category": "dataset",
-        "tags_any": [
-          "legal"
-        ],
-        "limit": 20
-      }
+      "user_id": "public",
+      "category": "dataset",
+      "tags_any": [
+        "legal"
+      ],
+      "limit": 20
     }
   ],
   "citations": {

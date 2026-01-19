@@ -12,15 +12,13 @@ If you see `datasets/...` examples (without `users/public/...`), treat them as h
 ```json
 {
   "tool": "query_dataset",
-  "params": {
-    "dataset": "eli_acts",
-    "q": "<optional search text>",
-    "pageId": "<optional deterministic id>",
-    "recordIndex": "<optional deterministic index>",
-    "limit": 10,
-    "fetch_content": false,
-    "content_slice": {"start": 0, "length": 2048}
-  }
+  "dataset": "eli_acts",
+  "q": "<optional search text>",
+  "pageId": "<optional deterministic id>",
+  "recordIndex": "<optional deterministic index>",
+  "limit": 10,
+  "fetch_content": false,
+  "content_slice": {"start": 0, "length": 2048}
 }
 ```
 
@@ -57,12 +55,10 @@ When enabled, backend tries to attach:
 ```json
 {
   "tool": "query_dataset",
-  "params": {
-    "dataset": "eli_acts",
-    "q": "podatek dochodowy",
-    "limit": 10,
-    "fetch_content": false
-  }
+  "dataset": "eli_acts",
+  "q": "podatek dochodowy",
+  "limit": 10,
+  "fetch_content": false
 }
 ```
 
@@ -70,12 +66,10 @@ When enabled, backend tries to attach:
 ```json
 {
   "tool": "query_dataset",
-  "params": {
-    "dataset": "eli_acts",
-    "pageId": "DU/1991/350",
-    "fetch_content": false,
-    "limit": 1
-  }
+  "dataset": "eli_acts",
+  "pageId": "DU/1991/350",
+  "fetch_content": false,
+  "limit": 1
 }
 ```
 
@@ -83,13 +77,11 @@ When enabled, backend tries to attach:
 ```json
 {
   "tool": "query_dataset",
-  "params": {
-    "dataset": "eli_acts",
-    "pageId": "DU/1997/553",
-    "fetch_content": true,
-    "limit": 1,
-    "content_slice": {"start": 0, "length": 4096}
-  }
+  "dataset": "eli_acts",
+  "pageId": "DU/1997/553",
+  "fetch_content": true,
+  "limit": 1,
+  "content_slice": {"start": 0, "length": 4096}
 }
 ```
 

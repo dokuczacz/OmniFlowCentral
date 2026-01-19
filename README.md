@@ -35,10 +35,8 @@ Run:
 Both HTTP triggers are `authLevel: function`.
 
 - `GET /api/health`
-- `POST /api/tools/call` (internal tools handler; not for Custom GPT)
-- `GET /api/tools/capabilities` (internal tool list + params; not for Custom GPT)
-- `POST /api/tools/gpt/call` (Custom GPT minimal tools handler)
-- `GET /api/tools/gpt/capabilities` (Custom GPT tool list + params)
+- `POST /api/tools/call` (unified tools dispatcher; preferred entrypoint)
+- `GET /api/tools/capabilities` (tool list + params; diagnostics)
 - `POST /api/custom_bridge` (Gmail bridge + OAuth + send/list/get/attach)
 - `GET|POST /api/oauth_email` (Microsoft OAuth token management for GPT email)
 - `GET /api/gmail_oauth_callback` (OAuth redirect for Google consent)

@@ -24,10 +24,6 @@
     "GMAIL_OAUTH_CLIENT_SECRET": "",
     "GMAIL_OAUTH_REDIRECT_URI": "http://localhost:7072/api/gmail_oauth_callback",
     "GMAIL_OAUTH_SCOPES": "https://mail.google.com/",
-    "GMAIL_OAUTH_PROMPT": "consent",
-    "AzureWebJobs.list_blobs.Disabled": "1",
-    "AzureWebJobs.upload_blob.Disabled": "1",
-    "AzureWebJobs.delete_blob.Disabled": "1",
-    "AzureWebJobs.read_blob_file.Disabled": "1"
+    "GMAIL_OAUTH_PROMPT": "consent"
   }
 }

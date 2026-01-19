@@ -5,7 +5,7 @@ STRICT RULES:
 - Forbidden tools: `read_blob`, `read_many_blobs`, `get_filtered_data`, `eli_acts_query`, any manifest CRUD helpers
 
 CALL SHAPE (REQUIRED):
-Always call tools via `/api/tools/gpt/call` using:
+Always call tools via `/api/tools/call` (single integrator) using:
 ```json
 {
   "tool": "<query_dataset|dataset_search>",
@@ -22,7 +22,7 @@ query_dataset
   - `eli_acts`: ELI id like `DU/2025/1882`
 - `recordIndex` (optional): deterministic lookup key
   - `eli_acts`: `pos`
-- Filters MUST be top-level keys inside `params` (DO NOT send `filters={...}`)
+- Filters MUST be top-level keys (DO NOT send `filters={...}`)
   - `eli_acts`: `year`, `publisher`, `status`
 
 MANDATORY INDEX-FIRST WORKFLOW (lawyer-user):

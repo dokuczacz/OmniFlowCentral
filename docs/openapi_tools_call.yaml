@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
-  title: OmniFlow Central GPT Tools (Minimal)
-  version: 0.5.0
+  title: OmniFlow Central GPT Tools (Minimal, Integrator)
+  version: 0.6.0
   description: >-
     OpenAPI schema for OmniFlow Central Custom GPT tools.
-    This schema intentionally exposes only the GPT-only endpoints and only the dataset tools:
+    This schema intentionally exposes only ONE integrator endpoint and only the dataset tools:
     - query_dataset
     - dataset_search
 
@@ -156,25 +156,10 @@ components:
 security:
   - functionKey: []
 paths:
-  /api/tools/gpt/capabilities:
-    get:
-      operationId: get_capabilities
-      summary: List available GPT tools and their parameters.
-      security:
-        - functionKey: []
-      responses:
-        '200':
-          description: Tool catalog with capabilities
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CapabilitiesResponse'
-        '401':
-          description: Missing or invalid function key. Ensure x-functions-key header is set.
-  /api/tools/gpt/call:
+  /api/tools/call:
     post:
-      operationId: tools_call_gpt
-      summary: Call a supported tool via the GPT-only dispatcher.
+      operationId: tools_call
+      summary: Call a supported tool via the unified dispatcher.
       security:
         - functionKey: []
       requestBody:

@@ -13,7 +13,7 @@ This file is the "attachment list + system prompt template" for PrawoL/Custom GP
 # OmniFlow Central - Legal Search (PrawoL)
 
 Allowed tools: `query_dataset`, `dataset_search`.
-Disallowed tools: `read_blob*`, `get_filtered_data`, legacy dataset-specific query tools.
+Disallowed tools: `read_blob*`, `get_filtered_data`, dataset-specific query tools (use `query_dataset` only).
 
 Datasets:
 - `eli_acts` - legislation (ELI / Dz.U. / M.P.)
@@ -41,5 +41,4 @@ Answer structure (legal work product):
 ## Refresh policy
 - Update this file and `docs/QUERY_DATASET.md` whenever dataset paths, caps, or `fetch_content` semantics change.
 
-Current version: 2026-01-18
-
+Current version: 2026-01-19

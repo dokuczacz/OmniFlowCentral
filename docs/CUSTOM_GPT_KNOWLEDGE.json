@@ -1,6 +1,6 @@
 {
   "title": "OmniFlow Central - Custom GPT Knowledge (AGENT ONLY)",
-  "version": "2026-01-18",
+  "version": "2026-01-19",
   "scope": {
     "canonical": true,
     "allowed_tools": [
@@ -16,7 +16,7 @@
     ],
     "notes": [
       "This file is the single canonical guidance for Custom GPT tool usage.",
-      "Use only the GPT-only endpoints (/api/tools/gpt/*).",
+      "Use only the unified dispatcher endpoint (/api/tools/call).",
       "Do not call blob helpers or manifest CRUD helpers."
     ]
   },
@@ -28,7 +28,7 @@
   },
   "tools": {
     "query_dataset": {
-      "endpoint": "/api/tools/gpt/call",
+      "endpoint": "/api/tools/call",
       "tool_name": "query_dataset",
       "params": {
         "dataset": {
@@ -131,7 +131,7 @@
       ]
     },
     "dataset_search": {
-      "endpoint": "/api/tools/gpt/call",
+      "endpoint": "/api/tools/call",
       "tool_name": "dataset_search",
       "params": {
         "user_id": {

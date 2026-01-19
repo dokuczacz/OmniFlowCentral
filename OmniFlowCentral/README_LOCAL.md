@@ -53,7 +53,7 @@ Then fill required `GMAIL_OAUTH_*` and storage settings for local runs.
 - Set environment variable `OMNIFLOW_DEFAULT_USER_ID` to force a default user_id used by handlers
 	when no header/query/body user is provided. Example (PowerShell):
 	- `$env:OMNIFLOW_DEFAULT_USER_ID = "default"`
-	- This affects endpoints like `/api/tools/call` and `/api/read_blob_file`.
+	- This affects endpoints like `/api/tools/call` (preferred entrypoint).
 
 ## Public → default migration
 

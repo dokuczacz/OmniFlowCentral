@@ -54,6 +54,27 @@ Discovery tool:
 
 - Tools contract: `docs/openapi_tools_call.yaml`
 
+## GPT App (Apps SDK / MCP) bootstrap
+
+Initial MCP adapter for replacing Custom GPT `PrawoL` is available in:
+- `OmniFlowCentral/mcp_app/server.py`
+- `OmniFlowCentral/mcp_app/adapter.py`
+
+Migration matrix (all existing tools + rollout phases):
+- `docs/GPT_APP_MIGRATION_MATRIX.md`
+
+Run locally:
+
+```powershell
+pip install -r OmniFlowCentral/requirements-mcp.txt
+python .\scripts\run_mcp_server.py
+python .\scripts\wp2_mcp_golden_suite.py
+python .\scripts\run_wu_integration_gate.py
+```
+
+Default MCP endpoint:
+- `http://127.0.0.1:8000/mcp`
+
 ## Data import (ELI / Sejm)
 
 Script: `scripts/eli_dump_to_blob.py`

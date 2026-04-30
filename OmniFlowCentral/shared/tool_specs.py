@@ -152,4 +152,25 @@ TOOL_SPECS = {
             "content_slice": "optional object {start:int, length:int} to request a bounded excerpt (defaults 0/2048 bytes, respects 2 MB cap)",
         },
     },
+    "saos_search": {
+        "description": "Search the external SAOS judgments API on demand. Read-only; use for case law search after grounding legal acts in ELI.",
+        "method": "POST",
+        "params": {
+            "q": "optional string (SAOS 'all' query across metadata and judgment text)",
+            "limit": "optional int (default 10, max 100)",
+            "page": "optional int (zero-based page number, default 0)",
+            "page_size": "optional int (SAOS pageSize, 10..100)",
+            "court_type": "optional string (SAOS courtType filter, e.g. COMMON, SUPREME)",
+            "judgment_date_from": "optional date string YYYY-MM-DD",
+            "judgment_date_to": "optional date string YYYY-MM-DD",
+            "case_number": "optional string (exact SAOS caseNumber filter)",
+        },
+    },
+    "saos_detail": {
+        "description": "Fetch details for a single SAOS judgment by judgment_id. Read-only external SAOS API call.",
+        "method": "POST",
+        "params": {
+            "judgment_id": "required int|string (SAOS judgment id returned by saos_search)",
+        },
+    },
 }

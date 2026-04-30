@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
 import requests
-from azure.core.exceptions import ResourceExistsError
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
 from azure.storage.blob import BlobServiceClient
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -59,6 +59,93 @@ def _fetch_acts_page(*, offset: int, limit: int, params: Dict[str, str], timeout
     if not isinstance(data, dict):
         raise ValueError("Unexpected response: expected JSON object")
     return data
+
+
+def _fetch_changed_acts_page(*, since: str, offset: int, limit: int, timeout_seconds: float) -> Dict:
+    resp = requests.get(
+        f"{ELI_BASE_URL}/changes/acts",
+        params={"since": since, "offset": offset, "limit": limit},
+        timeout=timeout_seconds,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise ValueError("Unexpected changes response: expected JSON object")
+    return data
+
+
+def _fetch_act_details(*, eli_id: str, timeout_seconds: float) -> Dict:
+    resp = requests.get(f"{ELI_BASE_URL}/acts/{eli_id}", timeout=timeout_seconds)
+    resp.raise_for_status()
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise ValueError(f"Unexpected act details response for {eli_id}: expected JSON object")
+    data.setdefault("ELI", eli_id)
+    data.setdefault("pageId", eli_id)
+    return data
+
+
+def _extract_changed_eli_ids(payload: Dict) -> List[str]:
+    found: List[str] = []
+
+    def walk(value) -> None:
+        if isinstance(value, dict):
+            publisher = str(value.get("publisher") or value.get("Publisher") or "").strip().upper()
+            year = value.get("year") or value.get("Year")
+            pos = value.get("pos") or value.get("position") or value.get("Position")
+            if publisher in {"DU", "MP"} and year and pos:
+                try:
+                    found.append(f"{publisher}/{int(year)}/{int(pos)}")
+                except (TypeError, ValueError):
+                    pass
+            for key in ("ELI", "eli", "pageId", "actId", "id"):
+                raw = value.get(key)
+                if isinstance(raw, str) and raw.count("/") == 2:
+                    prefix = raw.split("/", 1)[0].upper()
+                    if prefix in {"DU", "MP"}:
+                        found.append(raw.strip())
+            for nested in value.values():
+                walk(nested)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(payload)
+    deduped: List[str] = []
+    seen = set()
+    for eli_id in found:
+        if eli_id not in seen:
+            seen.add(eli_id)
+            deduped.append(eli_id)
+    return deduped
+
+
+def _download_index_records(*, connection_string: str, container_name: str, index_blob: str) -> Dict[str, Dict]:
+    service = BlobServiceClient.from_connection_string(connection_string)
+    container = service.get_container_client(container_name)
+    try:
+        raw = container.get_blob_client(index_blob).download_blob().readall()
+    except ResourceNotFoundError:
+        return {}
+
+    records: Dict[str, Dict] = {}
+    for line in raw.decode("utf-8", "replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        eli_id = str(record.get("ELI") or record.get("pageId") or "").strip()
+        if eli_id:
+            records[eli_id] = record
+    return records
+
+
+def _is_development_storage(connection_string: str) -> bool:
+    return connection_string.strip().lower() == "usedevelopmentstorage=true"
 
 
 def _extract_paging(payload: Dict) -> Tuple[int, int, int]:
@@ -139,6 +226,16 @@ def main() -> int:
         action="store_true",
         help="Do not fetch from ELI; instead build index + run metadata from already-uploaded pages in blob.",
     )
+    parser.add_argument(
+        "--changed-since",
+        default="",
+        help="Delta refresh mode: fetch ELI changed acts since YYYY-MM-DD, merge into the current Azure index, and write the refreshed JSONL index.",
+    )
+    parser.add_argument(
+        "--require-azure-storage",
+        action="store_true",
+        help="Fail fast when storage resolves to Azurite/development storage. Use for production ELI refresh runs.",
+    )
     parser.add_argument("--sleep-seconds", type=float, default=0.2, help="Delay between pages (default: 0.2).")
     parser.add_argument("--timeout-seconds", type=float, default=20.0, help="HTTP timeout (default: 20).")
     parser.add_argument("--dry-run", action="store_true", help="Fetch but do not upload to blob.")
@@ -148,6 +245,11 @@ def main() -> int:
     container_name = (args.container_name or "").strip() or (AzureConfig.CONTAINER_NAME or "").strip()
     if not connection_string or not container_name:
         raise ToolError("UPSTREAM_ERROR", "Missing Azure storage configuration.")
+    if args.require_azure_storage and _is_development_storage(connection_string):
+        raise ToolError(
+            "VALIDATION_FAILED",
+            "--require-azure-storage was set, but storage is Azurite/development storage.",
+        )
     # Ensure shared helpers (upload_blob, manifest updates) use the overridden target.
     AzureConfig.CONNECTION_STRING = connection_string
     AzureConfig.CONTAINER_NAME = container_name
@@ -169,6 +271,9 @@ def main() -> int:
         "started_at": datetime.now(timezone.utc).isoformat(),
         "pages": [],
     }
+    if args.changed_since:
+        run_meta["source"]["endpoint"] = "/changes/acts"
+        run_meta["query"]["since"] = args.changed_since
 
     jsonl_tmp = None
     jsonl_count = 0
@@ -178,7 +283,85 @@ def main() -> int:
         if args.write_index_jsonl:
             jsonl_tmp = tempfile.NamedTemporaryFile(mode="wb", delete=False)
 
-        if args.build_index_from_blob:
+        if args.changed_since:
+            if not args.write_index_jsonl:
+                raise ValueError("--changed-since requires --write-index-jsonl")
+
+            index_blob_abs = f"users/{args.user_id}/{args.blob_prefix.rstrip('/')}/index/acts_inforce_1.jsonl"
+            index_records = _download_index_records(
+                connection_string=connection_string,
+                container_name=container_name,
+                index_blob=index_blob_abs,
+            )
+            existing_count_before_merge = len(index_records)
+            changed_ids: List[str] = []
+
+            while True:
+                if args.max_pages >= 0 and pages_fetched >= args.max_pages:
+                    break
+
+                page = _fetch_changed_acts_page(
+                    since=args.changed_since,
+                    offset=next_offset,
+                    limit=limit,
+                    timeout_seconds=float(args.timeout_seconds),
+                )
+                page_offset, page_count, total = _extract_paging(page)
+                page_ids = _extract_changed_eli_ids(page)
+                changed_ids.extend(page_ids)
+
+                blob_name = (
+                    f"{args.blob_prefix.rstrip('/')}/changes/"
+                    f"changes_since_{args.changed_since}_offset_{page_offset:09}.json"
+                )
+                payload = json.dumps(page, ensure_ascii=False, separators=(",", ":"))
+                if not args.dry_run:
+                    upload_blob(
+                        name=blob_name,
+                        content=payload,
+                        user_id=args.user_id,
+                        overwrite=True,
+                    )
+
+                run_meta["pages"].append(
+                    {
+                        "blob_name": blob_name,
+                        "offset": page_offset,
+                        "count": page_count,
+                        "totalCount": total,
+                        "changed_eli_ids": len(page_ids),
+                    }
+                )
+                pages_fetched += 1
+                if page_count <= 0:
+                    break
+                next_offset = page_offset + page_count
+                if total and next_offset >= total:
+                    break
+                if args.sleep_seconds > 0:
+                    time.sleep(float(args.sleep_seconds))
+
+            unique_changed_ids = sorted(set(changed_ids))
+            for eli_id in unique_changed_ids:
+                detail = _fetch_act_details(eli_id=eli_id, timeout_seconds=float(args.timeout_seconds))
+                index_records[eli_id] = detail
+
+            if jsonl_tmp is not None:
+                for eli_id in sorted(index_records):
+                    line = json.dumps(index_records[eli_id], ensure_ascii=False, separators=(",", ":")) + "\n"
+                    raw = line.encode("utf-8")
+                    jsonl_tmp.write(raw)
+                    jsonl_hasher.update(raw)
+                    jsonl_count += 1
+                    jsonl_bytes += len(raw)
+
+            run_meta["delta"] = {
+                "changed_since": args.changed_since,
+                "changed_eli_ids": unique_changed_ids,
+                "existing_index_records_before_merge": existing_count_before_merge,
+                "index_records_after_merge": len(index_records),
+            }
+        elif args.build_index_from_blob:
             if not args.write_index_jsonl:
                 raise ValueError("--build-index-from-blob requires --write-index-jsonl")
             page_blob_names = _list_page_blobs(

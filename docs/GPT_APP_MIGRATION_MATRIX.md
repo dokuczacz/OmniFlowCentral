@@ -10,6 +10,8 @@ This matrix tracks migration from Custom GPT `PrawoL` (OpenAPI actions) to GPT A
 |---|---|---|---|---|
 | `query_dataset` | `query_dataset` | phase-1 | implemented | Core PrawoL retrieval path. |
 | `dataset_search` | `dataset_search` | phase-1 | implemented | Dataset discovery parity. |
+| `saos_search` | `saos_search` | phase-2 | implemented | External SAOS API search, read-only. |
+| `saos_detail` | `saos_detail` | phase-2 | implemented | External SAOS API detail fetch by judgment id, read-only. |
 | `eli_acts_query` | `eli_acts_query` | phase-2 | planned | Deprecated backend tool; keep for compatibility only if required. |
 | `search` (new) | `search` | phase-1.5 | implemented | MCP/company-knowledge-compatible wrapper over `query_dataset`. |
 | `fetch` (new) | `fetch` | phase-1.5 | implemented | MCP/company-knowledge-compatible wrapper for deterministic fetch. |
@@ -31,6 +33,8 @@ This matrix tracks migration from Custom GPT `PrawoL` (OpenAPI actions) to GPT A
 - Implemented tools:
   - `query_dataset`
   - `dataset_search`
+  - `saos_search`
+  - `saos_detail`
   - `search` (compatibility wrapper)
   - `fetch` (compatibility wrapper)
   - `migration_matrix` (operational visibility)
@@ -56,3 +60,19 @@ After **every** working unit (WU), run the integration gate before marking the u
    - `python scripts/run_wu_integration_gate.py`
 
 If either command fails, the WU is not complete and must be fixed before proceeding.
+
+## Execution Status (2026-03-04)
+
+### Completed
+
+- **WU-1**: MCP bootstrap with adapter package and server entrypoint.
+- **WU-2**: Golden suite (`WP2`) and deterministic timeout behavior.
+- **WU-3**: One-command integration gate after each WU.
+- **WU-4**: Contract tests for `search`/`fetch` (positive and negative paths).
+
+### Remaining
+
+- **WU-5**: Apps SDK metadata hardening (tool annotations, discovery-oriented descriptions).
+- **WU-6**: Optional OAuth readiness path (design + phased implementation, noauth remains default).
+- **WU-7**: ChatGPT connector validation checklist and rollout canary playbook (dev/stage/prod).
+- **WU-8**: Production hosting decision finalization and deployment runbook.

@@ -44,6 +44,20 @@ _PHASE_CONFIG: Dict[str, ToolMigrationEntry] = {
         status="implemented",
         notes="MVP parity for dataset discovery.",
     ),
+    "saos_search": ToolMigrationEntry(
+        tool="saos_search",
+        phase="phase-2",
+        mcp_name="saos_search",
+        status="implemented",
+        notes="Read-only external SAOS API search for on-demand judgments.",
+    ),
+    "saos_detail": ToolMigrationEntry(
+        tool="saos_detail",
+        phase="phase-2",
+        mcp_name="saos_detail",
+        status="implemented",
+        notes="Read-only external SAOS API detail fetch by judgment id.",
+    ),
     "eli_acts_query": ToolMigrationEntry(
         tool="eli_acts_query",
         phase="phase-2",

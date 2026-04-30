@@ -29,6 +29,7 @@ from shared.data_ops import (
 )
 from shared.error_codes import build_error_payload, get_status_code
 from shared.request_contract import parse_request
+from shared.saos_api import saos_detail, saos_search
 from shared.tool_catalog import canonical_tool_name, apply_param_aliases
 from shared.tool_specs import TOOL_SPECS
 from shared.user_validator import UserValidator
@@ -210,6 +211,16 @@ def _handle_query_dataset(params, user_id):
         else:
             result["warnings"] = warnings
     return result
+
+
+def _handle_saos_search(params, user_id):
+    return saos_search(params=params or {})
+
+
+def _handle_saos_detail(params, user_id):
+    return saos_detail(params=params or {})
+
+
 TOOL_HANDLERS = {
     "list_blobs": _handle_list_blobs,
     "upload_blob": _handle_upload,
@@ -225,6 +236,8 @@ TOOL_HANDLERS = {
     "dataset_search": _handle_dataset_search,
     "eli_acts_query": _handle_eli_acts_query,
     "query_dataset": _handle_query_dataset,
+    "saos_search": _handle_saos_search,
+    "saos_detail": _handle_saos_detail,
 }
 
 

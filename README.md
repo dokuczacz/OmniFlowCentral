@@ -99,6 +99,28 @@ python .\\scripts\\eli_index_export.py --output data/eli_acts_index.jsonl
 
 After exporting, use `docs/QUERY_DATASET.md` for the current query contract and examples.
 
+Production delta refresh to Azure (3-month catch-up pattern):
+
+```powershell
+$env:AZURE_STORAGE_CONNECTION_STRING = "<set outside repo>"
+$env:AZURE_BLOB_CONTAINER_NAME = "omniflowcentralcustomgpt"
+
+python .\scripts\eli_dump_to_blob.py `
+  --user-id public `
+  --changed-since 2026-01-30 `
+  --max-pages -1 `
+  --write-index-jsonl `
+  --require-azure-storage
+
+python .\scripts\eli_seed_texts_from_index.py `
+  --connection-string $env:AZURE_STORAGE_CONNECTION_STRING `
+  --container-name $env:AZURE_BLOB_CONTAINER_NAME `
+  --skip-existing `
+  --limit 0
+```
+
+The refresh writes directly under `users/public/datasets/eli_acts/...` and stores run metadata in `users/public/datasets/eli_acts/runs/`.
+
 ## CI/CD (GitHub Actions)
 
 Workflow: `.github/workflows/deploy-omniflowcentral.yml`

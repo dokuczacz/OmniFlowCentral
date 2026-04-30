@@ -5,7 +5,9 @@
     "canonical": true,
     "allowed_tools": [
       "query_dataset",
-      "dataset_search"
+      "dataset_search",
+      "saos_search",
+      "saos_detail"
     ],
     "forbidden_tools": [
       "eli_acts_query",
@@ -17,13 +19,18 @@
     "notes": [
       "This file is the single canonical guidance for Custom GPT tool usage.",
       "Use only the unified dispatcher endpoint (/api/tools/call).",
-      "Do not call blob helpers or manifest CRUD helpers."
+      "Do not call blob helpers or manifest CRUD helpers.",
+      "Use ELI for legal act grounding and SAOS tools for on-demand case law."
     ]
   },
   "datasets": {
     "eli_acts": {
       "description": "Polish legislation (ELI / Dz.U. / M.P.) in JSONL index",
       "dataset_id": "eli_acts"
+    },
+    "saos": {
+      "description": "External SAOS judgments API for on-demand case law search and detail.",
+      "source": "https://www.saos.org.pl/api"
     }
   },
   "tools": {
@@ -164,6 +171,39 @@
       "behavior": [
         "Use for manifest discovery (datasets, tags, categories)."
       ]
+    },
+    "saos_search": {
+      "endpoint": "/api/tools/call",
+      "tool_name": "saos_search",
+      "params": {
+        "q": {"required": false, "type": "string"},
+        "limit": {"required": false, "type": "integer", "maximum": 100},
+        "page": {"required": false, "type": "integer", "minimum": 0},
+        "page_size": {"required": false, "type": "integer", "minimum": 10, "maximum": 100},
+        "court_type": {"required": false, "type": "string"},
+        "judgment_date_from": {"required": false, "type": "string", "format": "date"},
+        "judgment_date_to": {"required": false, "type": "string", "format": "date"},
+        "case_number": {"required": false, "type": "string"}
+      },
+      "behavior": [
+        "Calls the external SAOS search API through OmniFlow backend.",
+        "Returns normalized hits with judgment_id, case_number, court, judgment_date, url, and SAOS provenance."
+      ],
+      "workflow": [
+        "Use after ELI grounding when the answer needs case law.",
+        "Use saos_detail only after selecting a stable judgment_id from saos_search."
+      ]
+    },
+    "saos_detail": {
+      "endpoint": "/api/tools/call",
+      "tool_name": "saos_detail",
+      "params": {
+        "judgment_id": {"required": true, "type": "integer|string"}
+      },
+      "behavior": [
+        "Fetches one SAOS judgment by id through OmniFlow backend.",
+        "Returns metadata, text excerpt/full text when safe, legal bases, referenced regulations, and SAOS provenance."
+      ]
     }
   },
   "examples": [
@@ -192,6 +232,16 @@
         "legal"
       ],
       "limit": 20
+    },
+    {
+      "tool": "saos_search",
+      "q": "przedawnienie zobowiązania",
+      "limit": 10,
+      "page": 0
+    },
+    {
+      "tool": "saos_detail",
+      "judgment_id": 123456
     }
   ],
   "citations": {
@@ -199,7 +249,9 @@
       "dataset",
       "index_path",
       "pageId",
-      "recordIndex"
+      "recordIndex",
+      "saos.judgment_id",
+      "saos.provenance.api_url"
     ]
   }
 }

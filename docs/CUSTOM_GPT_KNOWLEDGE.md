@@ -1,14 +1,14 @@
 # OmniFlow Central - Custom GPT Knowledge (AGENT ONLY)
 
 STRICT RULES:
-- Allowed tools: `query_dataset`, `dataset_search`
+- Allowed tools: `query_dataset`, `dataset_search`, `saos_search`, `saos_detail`
 - Forbidden tools: `read_blob`, `read_many_blobs`, `get_filtered_data`, `eli_acts_query`, any manifest CRUD helpers
 
 CALL SHAPE (REQUIRED):
 Always call tools via `/api/tools/call` (single integrator) using:
 ```json
 {
-  "tool": "<query_dataset|dataset_search>",
+  "tool": "<query_dataset|dataset_search|saos_search|saos_detail>",
   "...": "tool fields at root (do NOT wrap in a top-level params object)"
 }
 ```
@@ -66,6 +66,40 @@ Example:
 }
 ```
 
+saos_search
+- Use for on-demand case law after grounding the legal basis in `eli_acts`.
+- Params:
+  - `q` (optional): phrase for SAOS `all` search.
+  - `limit` (optional): 1..100.
+  - `page` (optional): zero-based page.
+  - `page_size` (optional): 10..100.
+  - `court_type` (optional): SAOS court type, e.g. `COMMON`, `SUPREME`.
+  - `judgment_date_from` / `judgment_date_to` (optional): `YYYY-MM-DD`.
+  - `case_number` (optional): exact sygnatura filter.
+
+Example:
+```json
+{
+  "tool": "saos_search",
+  "q": "przedawnienie zobowiązania",
+  "limit": 10,
+  "page": 0
+}
+```
+
+saos_detail
+- Use only after `saos_search` returned a stable `judgment_id`.
+- Params:
+  - `judgment_id` (required): SAOS judgment id.
+
+Example:
+```json
+{
+  "tool": "saos_detail",
+  "judgment_id": 123456
+}
+```
+
 TRUNCATION / SIZE:
 - Gateway limit is ~2MB per HTTP response.
 - Look for: `truncated=true` and per-hit `_fullTextTruncated=true` / `_fullTextExcerptTruncated=true`.
@@ -73,6 +107,14 @@ TRUNCATION / SIZE:
 CITATIONS (REQUIRED IN ANSWERS):
 - Always include provenance fields from tool output:
   - `dataset`, `provenance.index_path`, `pageId`, `recordIndex`
+  - for SAOS: `judgment_id`, `provenance.api_url`, `url`
+
+## ELI -> SAOS workflow
+1. Use `query_dataset` against `eli_acts` to identify the act and stable `pageId`.
+2. Build a short legal/case-law query from title, keywords, and the user's legal problem.
+3. Call `saos_search` for current case law.
+4. Call `saos_detail` only for selected results that need full metadata/text.
+5. Cite both ELI provenance and SAOS provenance when using both sources.
 
 ## Large-act strategy (2 MB cap)
 - The gateway enforces ~2 MB per HTTP response. If you request `fetch_content=true` for a full act like `DU/1997/553`, expect `_fullTextTruncated=true` or a `ResponseTooLargeError`.

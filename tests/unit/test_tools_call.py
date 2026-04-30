@@ -267,3 +267,37 @@ def test_tools_call_query_dataset_merges_nested_filters(fake_req):
         assert call_kwargs["params"]["dataset"] == "saos_judgments"
         assert call_kwargs["params"]["court_type"] == "common"
         assert "filters" not in call_kwargs["params"]
+
+
+def test_tools_call_saos_search(fake_req):
+    expected = {"status": "success", "hits": [{"judgment_id": 123}]}
+    with patch("OmniFlowCentral.tools_call.saos_search", return_value=expected) as mock_search:
+        req = fake_req(
+            json_body={
+                "tool": "saos_search",
+                "params": {"q": "przedawnienie", "limit": 5},
+            }
+        )
+        resp = tools_call.main(req)
+
+    assert resp.status_code == 200
+    body = json.loads(resp.get_body().decode("utf-8"))
+    assert body["result"] == expected
+    mock_search.assert_called_once_with(params={"q": "przedawnienie", "limit": 5})
+
+
+def test_tools_call_saos_detail(fake_req):
+    expected = {"status": "success", "judgment_id": 123}
+    with patch("OmniFlowCentral.tools_call.saos_detail", return_value=expected) as mock_detail:
+        req = fake_req(
+            json_body={
+                "tool": "saos_detail",
+                "params": {"judgment_id": 123},
+            }
+        )
+        resp = tools_call.main(req)
+
+    assert resp.status_code == 200
+    body = json.loads(resp.get_body().decode("utf-8"))
+    assert body["result"] == expected
+    mock_detail.assert_called_once_with(params={"judgment_id": 123})

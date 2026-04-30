@@ -33,6 +33,7 @@ _bootstrap_shared_imports()
 
 from shared.blob_ops import ToolError
 from shared.data_ops import dataset_search, query_dataset
+from shared.saos_api import saos_detail, saos_search
 
 
 def _default_user_id() -> str:
@@ -108,6 +109,37 @@ def run_dataset_search(arguments: Dict[str, Any]) -> CallToolResult:
         return _error_result(exc.code, exc.message, exc.details)
     except Exception as exc:
         return _error_result("UPSTREAM_ERROR", "dataset_search failed.", {"detail": str(exc)})
+
+
+def run_saos_search(arguments: Dict[str, Any]) -> CallToolResult:
+    try:
+        result = saos_search(params=arguments)
+        total_returned = int(result.get("total_returned") or len(result.get("hits") or []))
+        message = f"saos_search returned {total_returned} judgment(s)."
+        return _ok_result(
+            message=message,
+            structured=result,
+            meta={"source": "saos", "tool": "saos_search"},
+        )
+    except ToolError as exc:
+        return _error_result(exc.code, exc.message, exc.details)
+    except Exception as exc:
+        return _error_result("UPSTREAM_ERROR", "saos_search failed.", {"detail": str(exc)})
+
+
+def run_saos_detail(arguments: Dict[str, Any]) -> CallToolResult:
+    try:
+        result = saos_detail(params=arguments)
+        message = f"saos_detail returned judgment '{result.get('judgment_id')}'."
+        return _ok_result(
+            message=message,
+            structured=result,
+            meta={"source": "saos", "tool": "saos_detail"},
+        )
+    except ToolError as exc:
+        return _error_result(exc.code, exc.message, exc.details)
+    except Exception as exc:
+        return _error_result("UPSTREAM_ERROR", "saos_detail failed.", {"detail": str(exc)})
 
 
 def _canonical_hit_id(hit: Dict[str, Any], dataset: str) -> str:

@@ -14,4 +14,6 @@ def test_tools_capabilities_returns_list():
     assert 'capabilities' in data
     names = [c.get('name') for c in data['capabilities']]
     assert 'list_blobs' in names
+    assert 'saos_search' in names
+    assert 'saos_detail' in names
     assert set(names) == set(TOOL_SPECS.keys())

@@ -124,3 +124,30 @@ def test_mcp_fetch_missing_id_returns_error_contract():
     error = result.structuredContent.get("error")
     assert isinstance(error, dict)
     assert error.get("code") == "MISSING_PARAM"
+
+
+def test_mcp_search_unknown_dataset_returns_error_contract():
+    result = run_search({"query": "ustawa", "dataset": "unknown_dataset", "limit": 5})
+    assert result.isError is True
+    assert isinstance(result.structuredContent, dict)
+    error = result.structuredContent.get("error")
+    assert isinstance(error, dict)
+    assert error.get("code") == "INVALID_PARAM"
+
+
+def test_mcp_fetch_not_found_returns_error_contract():
+    blobs = _seed_eli_payload()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(
+            patch("OmniFlowCentral.shared.data_ops._connect_container", return_value=_StubContainer(blobs))
+        )
+        stack.enter_context(
+            patch("shared.data_ops._connect_container", return_value=_StubContainer(blobs))
+        )
+        result = run_fetch({"id": "eli_acts:DU/2099/9999:9999", "dataset": "eli_acts"})
+
+    assert result.isError is True
+    assert isinstance(result.structuredContent, dict)
+    error = result.structuredContent.get("error")
+    assert isinstance(error, dict)
+    assert error.get("code") == "NOT_FOUND"
